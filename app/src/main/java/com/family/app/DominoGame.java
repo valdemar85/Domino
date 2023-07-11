@@ -1,7 +1,6 @@
 package com.family.app;
 
 import android.content.Context;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -11,14 +10,16 @@ public class DominoGame {
     private int currentPlayerIndex = 0;
     private int initialTileCount = 7;
     private Context context; // Assume you have a context here
+    private String gameId;
 
-    public DominoGame(Context context, int playerCount) {
+    public DominoGame(Context context, int playerCount, String gameId) {
         this.context = context;
+        this.gameId = gameId;
         if (playerCount < 2 || playerCount > 4) {
             throw new IllegalArgumentException("Player count must be between 2 and 4.");
         }
         for (int i = 1; i <= playerCount; i++) {
-            players.add(new Player("Player" + i));
+            players.add(new Player("Player" + i, gameId));
         }
     }
 
@@ -54,5 +55,9 @@ public class DominoGame {
 
     public int getCurrentPlayerIndex() {
         return currentPlayerIndex;
+    }
+
+    public String getGameId() {
+        return gameId;
     }
 }

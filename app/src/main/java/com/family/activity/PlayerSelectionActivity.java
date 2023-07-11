@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import androidx.appcompat.app.AppCompatActivity;
+import com.family.app.MainActivity;
 import com.family.app.R;
 
 public class PlayerSelectionActivity extends AppCompatActivity {
@@ -18,7 +19,7 @@ public class PlayerSelectionActivity extends AppCompatActivity {
         connectButton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 // Переход к игре после подключения игроков
-                Intent intent = new Intent(PlayerSelectionActivity.this, GameActivity.class);
+                Intent intent = new Intent(PlayerSelectionActivity.this, MainActivity.class);
                 startActivity(intent);
             }
         });

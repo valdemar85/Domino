@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import androidx.appcompat.app.AppCompatActivity;
+import com.family.app.MainActivity;
 import com.family.app.R;
 
 public class ImageSelectionActivity extends AppCompatActivity {
@@ -18,7 +19,7 @@ public class ImageSelectionActivity extends AppCompatActivity {
         doneButton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 // Переход обратно к игре после завершения выбора изображений
-                Intent intent = new Intent(ImageSelectionActivity.this, GameActivity.class);
+                Intent intent = new Intent(ImageSelectionActivity.this, MainActivity.class);
                 startActivity(intent);
             }
         });

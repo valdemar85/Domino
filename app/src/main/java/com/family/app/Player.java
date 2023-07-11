@@ -6,14 +6,24 @@ import java.util.List;
 
 public class Player {
     private String name;
+    private String gameId;
     private List<DominoTile> hand = new ArrayList<>();
 
-    public Player(String name) {
+    public Player(String name, String gameId) {
         this.name = name;
+        this.gameId = gameId;
     }
 
     public String getName() {
         return name;
+    }
+
+    public String getGameId() {
+        return gameId;
+    }
+
+    public void setGameId(String gameId) {
+        this.gameId = gameId;
     }
 
     public void draw(Deck deck, int count) {
