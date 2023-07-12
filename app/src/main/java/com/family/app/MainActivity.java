@@ -8,6 +8,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -16,7 +17,7 @@ import java.util.Random;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final String[] DEFAULT_NAMES = {"John", "Alex", "Maria", "Emma", "Jacob"};
+    private static final String[] DEFAULT_NAMES = {"Альбертик", "Джузеппе", "Пипа", "Бобик", "Мармеладка", "Гришка", "ВасяПупкин", "Горпына", "Чиполино", "Тараканище", "Губозакаточный", "Кукурузка", "Бурундучок", "Чикибамбони", "Забияка", "Черипыжик", "Карлос", "Гонсалес"};
 
     private GameService gameService;
     private GameAdapter gameAdapter;
@@ -39,6 +40,7 @@ public class MainActivity extends AppCompatActivity {
         startGameButton = findViewById(R.id.start_game_button);
         playerNameInput = findViewById(R.id.player_name_input);
         gameList = findViewById(R.id.game_list);
+        gameList.addItemDecoration(new DividerItemDecoration(this, LinearLayoutManager.VERTICAL));
         errorMessage = findViewById(R.id.error_message);
 
         gameList.setLayoutManager(new LinearLayoutManager(this));
