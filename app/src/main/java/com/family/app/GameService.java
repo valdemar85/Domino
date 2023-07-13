@@ -30,7 +30,7 @@ public class GameService {
         this.listener = listener;
     }
 
-    public Game createGame(String id, String name, Player boss, List<Player> players) {
+    public Game createGame(String id, String name, String boss, List<Player> players) {
         Game game = new Game(id, name, boss, players);
         games.add(game);
         return game;
@@ -151,7 +151,7 @@ public class GameService {
         List<Player> players = new ArrayList<>();
         players.add(boss);
 
-        Game game = createGame(gameId, gameName, boss, players);
+        Game game = createGame(gameId, gameName, boss.getId(), players);
         setCurrentGame(game); // Set the current game after creating a new game
         return game;
     }

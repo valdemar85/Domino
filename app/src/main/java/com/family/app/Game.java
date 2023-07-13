@@ -5,14 +5,18 @@ import java.util.List;
 public class Game {
     private String id;
     private String name;
-    private Player boss;
+    private String bossId;
     private List<Player> players;
     private boolean isStarted;
 
-    public Game(String id, String name, Player boss, List<Player> players) {
+
+    // No-argument constructor
+    public Game() {}
+
+    public Game(String id, String name, String bossId, List<Player> players) {
         this.id = id;
         this.name = name;
-        this.boss = boss;
+        this.bossId = bossId;
         this.players = players;
         this.isStarted = false;  // The game is not started initially
     }
@@ -33,12 +37,12 @@ public class Game {
         this.name = name;
     }
 
-    public Player getBoss() {
-        return boss;
+    public String getBossId() {
+        return bossId;
     }
 
-    public void setBoss(Player boss) {
-        this.boss = boss;
+    public void setBossId(String bossId) {
+        this.bossId = bossId;
     }
 
     public List<Player> getPlayers() {
@@ -58,7 +62,7 @@ public class Game {
         return true;
     }
 
-    public boolean isGameStarted() {
+    public boolean isStarted() {
         return isStarted;
     }
 

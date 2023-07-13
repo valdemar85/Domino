@@ -3,13 +3,19 @@ package com.family.app;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 public class Player {
+    private String id;
     private String name;
     private String gameId;
     private List<DominoTile> hand = new ArrayList<>();
 
+    // No-argument constructor
+    public Player() {}
+
     public Player(String name, String gameId) {
+        this.id = UUID.randomUUID().toString();
         this.name = name;
         this.gameId = gameId;
     }
@@ -43,6 +49,14 @@ public class Player {
             }
         }
         return null;
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
     }
 
     // Other methods...

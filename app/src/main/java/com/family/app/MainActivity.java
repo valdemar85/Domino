@@ -13,11 +13,12 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final String[] DEFAULT_NAMES = {"Альбертик", "Джузеппе", "Пипа", "Бобик", "Мармеладка", "Гришка", "ВасяПупкин", "Горпына", "Чиполино", "Тараканище", "Губозакаточный", "Кукурузка", "Бурундучок", "Чикибамбони", "Забияка", "Черипыжик", "Карлос", "Гонсалес"};
+    private static final String[] DEFAULT_NAMES = {"Альбертик", "Джузеппе", "Пипа", "Бобик", "Слон", "Гришка", "ВасяПупкин", "Горпына", "Чиполино", "Тараканище", "Губозакаточный", "Кабан", "Бегемот", "Чикибамбони", "Забияка", "Чирипыжик", "Карлос", "Гонсалес"};
 
     private GameService gameService;
     private GameAdapter gameAdapter;
@@ -27,6 +28,7 @@ public class MainActivity extends AppCompatActivity {
     private RecyclerView gameList;
     private TextView errorMessage;
     private String currentGameId; // добавляем переменную для сохранения текущего ID игры
+    private GameSyncService gameSyncService;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -34,6 +36,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_game);
 
         gameService = GameService.getInstance();
+        gameSyncService = new GameSyncService();
 
         newGameButton = findViewById(R.id.new_game_button);
         cancelGameButton = findViewById(R.id.cancel_game_button);
@@ -57,6 +60,7 @@ public class MainActivity extends AppCompatActivity {
             if (game != null) {
                 currentGameId = game.getId();
                 playerNameInput.setEnabled(false); // делаем поле нередактируемым
+                gameSyncService.syncGame(game);
             }
             updateUI();
         });
@@ -64,6 +68,7 @@ public class MainActivity extends AppCompatActivity {
         cancelGameButton.setOnClickListener(v -> {
             if (currentGameId != null) {
                 gameService.cancelGame(currentGameId);
+                gameSyncService.removeGame(currentGameId);
                 currentGameId = null;
                 playerNameInput.setEnabled(true); // делаем поле снова редактируемым
                 updateUI();
@@ -103,12 +108,33 @@ public class MainActivity extends AppCompatActivity {
                 // No operation needed here
             }
         });
+        loadUnstartedGames();
+    }
+
+    private void loadUnstartedGames() {
+        gameSyncService.getAllUnstartedGames(new GamesDataCallback() {
+            @Override
+            public void onGamesLoaded(List<Game> games) {
+                // Обновление списка игр в RecyclerView
+                gameAdapter.updateGames(games);
+                errorMessage.setVisibility(View.GONE);
+                gameList.setVisibility(View.VISIBLE);
+            }
+
+            @Override
+            public void onDataNotAvailable(String error) {
+                // Показ сообщения об ошибке
+                errorMessage.setText("Ошибка загрузки таблицы: " + error);
+                errorMessage.setVisibility(View.VISIBLE);
+                gameList.setVisibility(View.GONE);
+            }
+        });
     }
 
     private void updateUI() {
         Game game = gameService.getCurrentGame();
         if (game != null) {
-            if (game.isGameStarted()) {
+            if (game.isStarted()) {
                 // Обновите UI для начала игры, возможно, переход на новую активность
             } else {
                 newGameButton.setVisibility(View.GONE);
