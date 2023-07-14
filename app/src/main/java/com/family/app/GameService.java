@@ -40,6 +40,10 @@ public class GameService {
         return games;
     }
 
+    public void updateGames(List<Game> updatedGames) {
+        this.games = updatedGames;
+    }
+
     public Game findGameById(String id) {
         for (Game game : games) {
             if (game.getId().equals(id)) {
@@ -154,5 +158,19 @@ public class GameService {
         Game game = createGame(gameId, gameName, boss.getId(), players);
         setCurrentGame(game); // Set the current game after creating a new game
         return game;
+    }
+
+    public void updateGame(Game updatedGame) {
+        if (updatedGame == null) return;
+
+        Game existingGame = findGameById(updatedGame.getId());
+
+        if (existingGame != null) {
+            games.remove(existingGame);
+            games.add(updatedGame);
+            if (currentGame != null && currentGame.getId().equals(updatedGame.getId())) {
+                setCurrentGame(updatedGame);
+            }
+        }
     }
 }

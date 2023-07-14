@@ -11,17 +11,40 @@ import java.util.List;
 
 public class GameSyncService {
     public static final String GAMES_TABLE_NAME = "games";
+    private ValueEventListener gameEventListener;
 
     public GameSyncService() {
     }
 
-    // Синхронизация состояния игры с базой данных
-    public void syncGame(Game game) {
+    public void saveGame(Game game) {
         FirebaseDatabase database = FirebaseDatabase.getInstance();
-        DatabaseReference databaseReference = database.getReference(GAMES_TABLE_NAME).child(game.getId());
-        // Обновляем значение игры в базе данных
-        databaseReference.setValue(game);
+        DatabaseReference gameRef = database.getReference(GAMES_TABLE_NAME).child(game.getId());
+
+        gameRef.setValue(game);
     }
+
+    public void syncGame(final GameDataCallback callback, String gameId) {
+        FirebaseDatabase database = FirebaseDatabase.getInstance();
+        DatabaseReference gameRef = database.getReference(GAMES_TABLE_NAME).child(gameId);
+
+        gameRef.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(DataSnapshot dataSnapshot) {
+                Game game = dataSnapshot.getValue(Game.class);
+                if (game != null) {
+                    callback.onGameLoaded(game);
+                } else {
+                    callback.onDataNotAvailable("Game not found");
+                }
+            }
+
+            @Override
+            public void onCancelled(DatabaseError databaseError) {
+                callback.onDataNotAvailable(databaseError.getMessage());
+            }
+        });
+    }
+
 
     // Удаление игры из базы данных по ее id
     public void removeGame(String gameId) {
@@ -52,7 +75,7 @@ public class GameSyncService {
     public void getAllUnstartedGames(final GamesDataCallback callback) {
         DatabaseReference gamesRef = FirebaseDatabase.getInstance().getReference(GAMES_TABLE_NAME);
 
-        gamesRef.addListenerForSingleValueEvent(new ValueEventListener() {
+        gameEventListener = gamesRef.addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 List<Game> unstartedGames = new ArrayList<>();
@@ -71,7 +94,12 @@ public class GameSyncService {
             }
         });
     }
+
+    // Метод для удаления слушателя базы данных
+    public void removeGameEventListener() {
+        if (gameEventListener != null) {
+            FirebaseDatabase.getInstance().getReference(GAMES_TABLE_NAME).removeEventListener(gameEventListener);
+            gameEventListener = null;
+        }
+    }
 }
-
-
-

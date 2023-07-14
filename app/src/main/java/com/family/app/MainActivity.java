@@ -7,6 +7,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -27,7 +28,7 @@ public class MainActivity extends AppCompatActivity {
     private EditText playerNameInput;
     private RecyclerView gameList;
     private TextView errorMessage;
-    private String currentGameId; // добавляем переменную для сохранения текущего ID игры
+    private String currentGameId;
     private GameSyncService gameSyncService;
 
     @Override
@@ -56,11 +57,28 @@ public class MainActivity extends AppCompatActivity {
                 errorMessage.setText("Введите имя");
                 return;
             }
-            Game game = gameService.createGame(playerName); // получаем созданную игру
+            Game game = gameService.createGame(playerName);
             if (game != null) {
                 currentGameId = game.getId();
-                playerNameInput.setEnabled(false); // делаем поле нередактируемым
-                gameSyncService.syncGame(game);
+                playerNameInput.setEnabled(false);
+                gameSyncService.saveGame(game);
+                gameAdapter.updateGameStatus(true);
+                GameDataCallback gameDataCallback = new GameDataCallback() {
+                    @Override
+                    public void onGameLoaded(Game game) {
+                        // Если игра успешно загружена, можно обновить UI или выполнить другие действия.
+                        gameAdapter.updateGame(game); // предполагая, что у вас есть соответствующий метод в GameAdapter
+                        updateUI(); // обновляем интерфейс
+                    }
+
+                    @Override
+                    public void onDataNotAvailable(String error) {
+                        // Если данные не доступны, можно показать сообщение об ошибке.
+                        errorMessage.setText("Ошибка загрузки игры: " + error);
+                        errorMessage.setVisibility(View.VISIBLE);
+                    }
+                };
+                gameSyncService.syncGame(gameDataCallback, game.getId());
             }
             updateUI();
         });
@@ -70,7 +88,8 @@ public class MainActivity extends AppCompatActivity {
                 gameService.cancelGame(currentGameId);
                 gameSyncService.removeGame(currentGameId);
                 currentGameId = null;
-                playerNameInput.setEnabled(true); // делаем поле снова редактируемым
+                playerNameInput.setEnabled(true);
+                gameAdapter.updateGameStatus(false);
                 updateUI();
             }
         });
@@ -78,6 +97,8 @@ public class MainActivity extends AppCompatActivity {
         startGameButton.setOnClickListener(v -> {
             if (currentGameId != null) {
                 gameService.startGame(currentGameId);
+                gameSyncService.removeGameEventListener();
+                // переходите на новую активность здесь
                 updateUI();
             }
         });
@@ -95,10 +116,8 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
                 if (s.toString().trim().isEmpty()) {
-                    // Если поле ввода стало пустым, показываем сообщение об ошибке
                     playerNameInput.setError("Введите имя");
                 } else {
-                    // Иначе, обновляем имя в адаптере
                     gameAdapter.updatePlayerName(s.toString());
                 }
             }
@@ -116,6 +135,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onGamesLoaded(List<Game> games) {
                 // Обновление списка игр в RecyclerView
+                gameService.updateGames(games);
                 gameAdapter.updateGames(games);
                 errorMessage.setVisibility(View.GONE);
                 gameList.setVisibility(View.VISIBLE);
@@ -151,5 +171,38 @@ public class MainActivity extends AppCompatActivity {
             startGameButton.setVisibility(View.GONE);
         }
         gameAdapter.updateGames(gameService.getGames());
+        System.out.println("--------------------------"+gameService.getGames().size());
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        gameSyncService.removeGameEventListener();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        loadUnstartedGames();
+
+        if (currentGameId != null) {
+            gameSyncService.syncGame(new GameDataCallback() {
+                @Override
+                public void onGameLoaded(Game game) {
+                    if (game != null) {
+                        gameService.updateGame(game);
+                        updateUI();
+                    }
+                }
+
+                @Override
+                public void onDataNotAvailable(String error) {
+                    // handle error
+                    errorMessage.setText("Sync error: " + error);
+                    errorMessage.setVisibility(View.VISIBLE);
+                    gameList.setVisibility(View.GONE);
+                }
+            }, currentGameId);
+        }
     }
 }
