@@ -1,4 +1,4 @@
-package com.family.app;
+package com.family.activity;
 
 import android.os.Bundle;
 import android.text.Editable;
@@ -7,34 +7,77 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
-
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import com.family.app.*;
+import com.family.callbacks.GameDataCallback;
+import com.family.callbacks.GamesDataCallback;
+import com.family.dto.Game;
+import com.family.dto.Player;
+import com.family.service.GameService;
+import com.family.service.GameSyncService;
+import com.family.utils.UserUtils;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
+import java.util.concurrent.CountDownLatch;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final String[] DEFAULT_NAMES = {"Альбертик", "Джузеппе", "Пипа", "Бобик", "Слон", "Гришка", "ВасяПупкин", "Горпына", "Чиполино", "Тараканище", "Губозакаточный", "Кабан", "Бегемот", "Чикибамбони", "Забияка", "Чирипыжик", "Карлос", "Гонсалес"};
-
     private GameService gameService;
-    private GameAdapter gameAdapter;
+    private GameListTable gameListTable;
 
     private Button newGameButton, cancelGameButton, startGameButton;
     private EditText playerNameInput;
     private RecyclerView gameList;
     private TextView errorMessage;
-    private String currentGameId;
     private GameSyncService gameSyncService;
+    private String currentUserId;
+    final CountDownLatch latch = new CountDownLatch(1);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_game);
+
+        UserUtils.getAdvertisingId(getApplicationContext(), adId -> {
+            currentUserId = adId;
+            gameSyncService.findGameByPlayerId(adId, new GameDataCallback() {
+                @Override
+                public void onGameLoaded(Game game) {
+                    try {
+                        latch.await(); // ждем, пока счетчик CountDownLatch не станет 0
+                        if (game != null) {
+                            Player playerById = game.getPlayerById(adId);
+                            playerNameInput.setText(playerById.getName());
+                            playerNameInput.setEnabled(false);
+                            gameService.setCurrentGame(game);
+                            gameListTable.setInGame(true);
+                            gameListTable.setPlayerName(playerById.getName());
+                            gameListTable.setPlayerId(playerById.getId());
+                            updateUI();
+                        } else {
+                            // Обрабатываем случай, когда игра не найдена
+                            // ничего не делаем - у нас и так приложение загрузилось как для нового пользователя
+                        }
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+
+                @Override
+                public void onDataNotAvailable(String error) {
+                    try {
+                        latch.await(); // ждем, пока счетчик CountDownLatch не станет 0
+                        errorMessage.setText("Ошибка загрузки игры: " + error);
+                        errorMessage.setVisibility(View.VISIBLE);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+        });
 
         gameService = GameService.getInstance();
         gameSyncService = new GameSyncService();
@@ -48,8 +91,8 @@ public class MainActivity extends AppCompatActivity {
         errorMessage = findViewById(R.id.error_message);
 
         gameList.setLayoutManager(new LinearLayoutManager(this));
-        gameAdapter = new GameAdapter(new ArrayList<>(), gameService, playerNameInput.getText().toString());
-        gameList.setAdapter(gameAdapter);
+        gameListTable = new GameListTable(gameService, playerNameInput.getText().toString(), currentUserId);
+        gameList.setAdapter(gameListTable);
 
         newGameButton.setOnClickListener(v -> {
             String playerName = playerNameInput.getText().toString();
@@ -57,55 +100,52 @@ public class MainActivity extends AppCompatActivity {
                 errorMessage.setText("Введите имя");
                 return;
             }
-            Game game = gameService.createGame(playerName);
-            if (game != null) {
-                currentGameId = game.getId();
-                playerNameInput.setEnabled(false);
-                gameSyncService.saveGame(game);
-                gameAdapter.updateGameStatus(true);
-                GameDataCallback gameDataCallback = new GameDataCallback() {
-                    @Override
-                    public void onGameLoaded(Game game) {
-                        // Если игра успешно загружена, можно обновить UI или выполнить другие действия.
-                        gameAdapter.updateGame(game); // предполагая, что у вас есть соответствующий метод в GameAdapter
-                        updateUI(); // обновляем интерфейс
-                    }
+            Game game = gameService.createGame(playerName, currentUserId);
+            playerNameInput.setEnabled(false);
+            gameSyncService.saveGame(game);
+            gameListTable.updateGameStatus(true);
+            GameDataCallback gameDataCallback = new GameDataCallback() {
+                @Override
+                public void onGameLoaded(Game game) {
+                    // Если игра успешно загружена, можно обновить UI или выполнить другие действия.
+                    gameService.updateGame(game);
+                    updateUI(); // обновляем интерфейс
+                }
 
-                    @Override
-                    public void onDataNotAvailable(String error) {
-                        // Если данные не доступны, можно показать сообщение об ошибке.
-                        errorMessage.setText("Ошибка загрузки игры: " + error);
-                        errorMessage.setVisibility(View.VISIBLE);
-                    }
-                };
-                gameSyncService.syncGame(gameDataCallback, game.getId());
-            }
+                @Override
+                public void onDataNotAvailable(String error) {
+                    // Если данные не доступны, можно показать сообщение об ошибке.
+                    errorMessage.setText("Ошибка загрузки игры: " + error);
+                    errorMessage.setVisibility(View.VISIBLE);
+                }
+            };
+            gameSyncService.syncGame(gameDataCallback, game.getId());
+
             updateUI();
         });
 
         cancelGameButton.setOnClickListener(v -> {
-            if (currentGameId != null) {
-                gameService.cancelGame(currentGameId);
-                gameSyncService.removeGame(currentGameId);
-                currentGameId = null;
+            if (gameService.getCurrentGame() != null) {
+                gameSyncService.removeGame(gameService.getCurrentGame().getId());
+                gameService.removeGame(gameService.getCurrentGame().getId());
                 playerNameInput.setEnabled(true);
-                gameAdapter.updateGameStatus(false);
+                gameListTable.updateGameStatus(false);
                 updateUI();
             }
         });
 
         startGameButton.setOnClickListener(v -> {
-            if (currentGameId != null) {
-                gameService.startGame(currentGameId);
+            if (gameService.getCurrentGame() != null) {
+                gameService.startGame(gameService.getCurrentGame().getId());
                 gameSyncService.removeGameEventListener();
                 // переходите на новую активность здесь
                 updateUI();
             }
         });
 
-        String defaultName = DEFAULT_NAMES[new Random().nextInt(DEFAULT_NAMES.length)];
+        String defaultName = UserUtils.generateDefaultName();
         playerNameInput.setText(defaultName);
-        gameAdapter.updatePlayerName(defaultName);
+        gameListTable.updatePlayerName(defaultName);
 
         playerNameInput.addTextChangedListener(new TextWatcher() {
             @Override
@@ -118,7 +158,7 @@ public class MainActivity extends AppCompatActivity {
                 if (s.toString().trim().isEmpty()) {
                     playerNameInput.setError("Введите имя");
                 } else {
-                    gameAdapter.updatePlayerName(s.toString());
+                    gameListTable.updatePlayerName(s.toString());
                 }
             }
 
@@ -135,10 +175,11 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onGamesLoaded(List<Game> games) {
                 // Обновление списка игр в RecyclerView
-                gameService.updateGames(games);
-                gameAdapter.updateGames(games);
+                gameService.setGames(games);
                 errorMessage.setVisibility(View.GONE);
                 gameList.setVisibility(View.VISIBLE);
+                updateUI();
+                latch.countDown(); // уменьшаем счетчик на 1
             }
 
             @Override
@@ -147,6 +188,7 @@ public class MainActivity extends AppCompatActivity {
                 errorMessage.setText("Ошибка загрузки таблицы: " + error);
                 errorMessage.setVisibility(View.VISIBLE);
                 gameList.setVisibility(View.GONE);
+                latch.countDown(); // уменьшаем счетчик на 1
             }
         });
     }
@@ -170,8 +212,7 @@ public class MainActivity extends AppCompatActivity {
             cancelGameButton.setVisibility(View.GONE);
             startGameButton.setVisibility(View.GONE);
         }
-        gameAdapter.updateGames(gameService.getGames());
-        System.out.println("--------------------------"+gameService.getGames().size());
+        gameListTable.notifyDataSetChanged();
     }
 
     @Override
@@ -185,7 +226,7 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         loadUnstartedGames();
 
-        if (currentGameId != null) {
+        if (gameService.getCurrentGame() != null) {
             gameSyncService.syncGame(new GameDataCallback() {
                 @Override
                 public void onGameLoaded(Game game) {
@@ -202,7 +243,7 @@ public class MainActivity extends AppCompatActivity {
                     errorMessage.setVisibility(View.VISIBLE);
                     gameList.setVisibility(View.GONE);
                 }
-            }, currentGameId);
+            }, gameService.getCurrentGame().getId());
         }
     }
 }

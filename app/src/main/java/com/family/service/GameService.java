@@ -1,4 +1,7 @@
-package com.family.app;
+package com.family.service;
+
+import com.family.dto.Game;
+import com.family.dto.Player;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,7 +14,6 @@ public class GameService {
     private Game currentGame;
 
     private GameService() {
-        // конструктор
     }
 
     public static GameService getInstance() {
@@ -30,8 +32,8 @@ public class GameService {
         this.listener = listener;
     }
 
-    public Game createGame(String id, String name, String boss, List<Player> players) {
-        Game game = new Game(id, name, boss, players);
+    public Game createGame(String id, String name, String bossId, List<Player> players) {
+        Game game = new Game(id, name, bossId, players);
         games.add(game);
         return game;
     }
@@ -40,8 +42,8 @@ public class GameService {
         return games;
     }
 
-    public void updateGames(List<Game> updatedGames) {
-        this.games = updatedGames;
+    public void setGames(List<Game> games) {
+        this.games = games;
     }
 
     public Game findGameById(String id) {
@@ -117,10 +119,8 @@ public class GameService {
             return false; // Game not found
         }
 
-        boolean gameStarted = game.startGame(); // This should start the game and return true if successful
+        boolean gameStarted = game.startGame();
         if (gameStarted) {
-            // Code to sync the game state with Firebase
-            // This will depend on how you've set up your Firebase database
             setCurrentGame(game); // Update the current game after starting a game
         }
 
@@ -135,23 +135,19 @@ public class GameService {
         this.currentGame = currentGame;
     }
 
-    public boolean cancelGame(String gameId) {
+    public boolean removeGame(String gameId) {
+        currentGame = null;
         Game game = findGameById(gameId);
         if (game == null) {
             return false; // Game not found
         }
-
-        boolean result = games.remove(game); // Remove the game from the list of games
-        if (result) {
-            setCurrentGame(null); // Reset the current game after cancelling a game
-        }
-        return result;
+        return games.remove(game);
     }
 
-    public Game createGame(String playerName) {
+    public Game createGame(String playerName, String playerId) {
         String gameId = UUID.randomUUID().toString();
         String gameName = playerName + "'s Game";
-        Player boss = new Player(playerName, gameId);
+        Player boss = new Player(playerName, gameId, playerId);
         List<Player> players = new ArrayList<>();
         players.add(boss);
 

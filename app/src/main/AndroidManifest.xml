@@ -13,7 +13,7 @@
             android:theme="@style/Theme.Domino">
 
         <activity
-                android:name=".MainActivity"
+                android:name="com.family.activity.MainActivity"
                 android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
@@ -22,12 +22,5 @@
             </intent-filter>
         </activity>
 
-        <activity
-                android:name="com.family.activity.ImageSelectionActivity"
-                android:exported="false"/>
-
-        <activity
-                android:name="com.family.activity.PlayerSelectionActivity"
-                android:exported="false"/>
     </application>
 </manifest>

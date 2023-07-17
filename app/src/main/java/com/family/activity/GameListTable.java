@@ -1,22 +1,50 @@
-package com.family.app;
+package com.family.activity;
 
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import androidx.recyclerview.widget.RecyclerView;
+import com.family.dto.Game;
+import com.family.service.GameService;
+import com.family.dto.Player;
+import com.family.app.R;
 
-import java.util.List;
-
-public class GameAdapter extends RecyclerView.Adapter<GameViewHolder> {
-    private List<Game> gameList;
-    private GameService gameService;
+public class GameListTable extends RecyclerView.Adapter<GameViewHolder> {
+    private final GameService gameService;
     private String playerName;
+    private String playerId;
     private boolean isInGame;  // flag to check if the player is already in a game
 
-    public GameAdapter(List<Game> gameList, GameService gameService, String playerName) {
-        this.gameList = gameList;
+    public String getPlayerName() {
+        return playerName;
+    }
+
+    public void setPlayerName(String playerName) {
+        this.playerName = playerName;
+    }
+
+    public void setPlayerId(String playerId) {
+        this.playerId = playerId;
+    }
+
+    public String getPlayerId() {
+        return playerId;
+    }
+
+    public boolean isInGame() {
+        return isInGame;
+    }
+
+    public void setInGame(boolean inGame) {
+        isInGame = inGame;
+    }
+
+
+
+    public GameListTable(GameService gameService, String playerName, String playerId) {
         this.gameService = gameService;
         this.playerName = playerName;
+        this.playerId = playerId;
         this.isInGame = false;
     }
 
@@ -28,19 +56,19 @@ public class GameAdapter extends RecyclerView.Adapter<GameViewHolder> {
 
     @Override
     public void onBindViewHolder(GameViewHolder holder, int position) {
-        Game game = gameList.get(position);
+        Game game = gameService.getGames().get(position);
         holder.gameName.setText(game.getName());
         holder.playerCount.setText(String.valueOf(game.getPlayers().size()));
 
         holder.connectButton.setOnClickListener(v -> {
-            if (!isInGame && game.getPlayers().size() < 4 && !game.hasPlayer(playerName)) {
-                gameService.connectToGame(game.getId(), new Player(playerName, "Optional Player Data"));
+            if (!isInGame && game.getPlayers().size() < 4 && !game.hasPlayer(playerId)) {
+                gameService.connectToGame(game.getId(), new Player(playerName, "Optional Player Data", playerId));
                 isInGame = true;
                 holder.connectButton.setEnabled(false); // disable the button after the player joins the game
             }
         });
 
-        if (game.getPlayers().size() >= 4 || game.hasPlayer(playerName) || isInGame) {
+        if (game.getPlayers().size() >= 4 || game.hasPlayer(playerId) || isInGame) {
             holder.connectButton.setEnabled(false);
         } else {
             holder.connectButton.setEnabled(true);
@@ -49,32 +77,7 @@ public class GameAdapter extends RecyclerView.Adapter<GameViewHolder> {
 
     @Override
     public int getItemCount() {
-        return gameList.size();
-    }
-
-    public void addGame(Game game) {
-        this.gameList.add(game);
-        notifyItemInserted(gameList.size() - 1);
-    }
-
-    public void updateGames(List<Game> gameList) {
-        this.gameList = gameList;
-        notifyDataSetChanged();
-    }
-
-    public void updateAllGames() {
-        notifyDataSetChanged();
-    }
-
-    public void updateGame(Game updatedGame) {
-        for (int i = 0; i < gameList.size(); i++) {
-            Game game = gameList.get(i);
-            if (game.getId().equals(updatedGame.getId())) {
-                gameList.set(i, updatedGame);
-                notifyItemChanged(i);
-                break;
-            }
-        }
+        return gameService.getGames().size();
     }
 
     public void updatePlayerName(String playerName) {
@@ -86,4 +89,5 @@ public class GameAdapter extends RecyclerView.Adapter<GameViewHolder> {
         this.isInGame = isInGame;
         notifyDataSetChanged();  // It's necessary to redraw the elements to update the buttons' state
     }
+
 }

@@ -1,4 +1,4 @@
-package com.family.app;
+package com.family.dto;
 
 import java.util.List;
 
@@ -37,20 +37,17 @@ public class Game {
         this.name = name;
     }
 
-    public String getBossId() {
-        return bossId;
-    }
-
-    public void setBossId(String bossId) {
-        this.bossId = bossId;
-    }
-
     public List<Player> getPlayers() {
         return players;
     }
 
-    public void setPlayers(List<Player> players) {
-        this.players = players;
+    public Player getPlayerById(String playerId) {
+        for (Player player : players) {
+            if (player.getId().equals(playerId)) {
+                return player;
+            }
+        }
+        return null;
     }
 
     public boolean startGame() {
@@ -66,9 +63,9 @@ public class Game {
         return isStarted;
     }
 
-    public boolean hasPlayer(String playerName) {
+    public boolean hasPlayer(String playerId) {
         for (Player player : players) {
-            if (player.getName().equals(playerName)) {
+            if (player.getId().equals(playerId)) {
                 return true;
             }
         }

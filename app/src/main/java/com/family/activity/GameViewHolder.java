@@ -1,9 +1,10 @@
-package com.family.app;
+package com.family.activity;
 
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 import androidx.recyclerview.widget.RecyclerView;
+import com.family.app.R;
 
 public class GameViewHolder extends RecyclerView.ViewHolder {
     TextView gameName, playerCount;
