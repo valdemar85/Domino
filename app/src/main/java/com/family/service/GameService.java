@@ -8,10 +8,11 @@ import java.util.List;
 import java.util.UUID;
 
 public class GameService {
-    private List<Game> games = new ArrayList<>();
-    private ConnectionRequestListener listener;
     private static GameService instance = null;
+    private ConnectionRequestListener listener;
+    private List<Game> games = new ArrayList<>();
     private Game currentGame;
+    private Player currentPlayer;
 
     private GameService() {
     }
@@ -30,12 +31,6 @@ public class GameService {
 
     public void setConnectionRequestListener(ConnectionRequestListener listener) {
         this.listener = listener;
-    }
-
-    public Game createGame(String id, String name, String bossId, List<Player> players) {
-        Game game = new Game(id, name, bossId, players);
-        games.add(game);
-        return game;
     }
 
     public List<Game> getGames() {
@@ -113,15 +108,15 @@ public class GameService {
         return true;
     }
 
-    public boolean startGame(String gameId) {
-        Game game = findGameById(gameId);
+    public boolean startGame() {
+        Game game = findGameById(currentGame.getId());
         if (game == null) {
             return false; // Game not found
         }
 
         boolean gameStarted = game.startGame();
         if (gameStarted) {
-            setCurrentGame(game); // Update the current game after starting a game
+            currentGame = game; // Update the current game after starting a game
         }
 
         return gameStarted;
@@ -135,6 +130,14 @@ public class GameService {
         this.currentGame = currentGame;
     }
 
+    public Player getCurrentPlayer() {
+        return currentPlayer;
+    }
+
+    public void setCurrentPlayer(Player currentPlayer) {
+        this.currentPlayer = currentPlayer;
+    }
+
     public boolean removeGame(String gameId) {
         currentGame = null;
         Game game = findGameById(gameId);
@@ -144,15 +147,14 @@ public class GameService {
         return games.remove(game);
     }
 
-    public Game createGame(String playerName, String playerId) {
+    public Game createGame() {
         String gameId = UUID.randomUUID().toString();
-        String gameName = playerName + "'s Game";
-        Player boss = new Player(playerName, gameId, playerId);
+        String gameName = currentPlayer.getName() + "'s Game";
         List<Player> players = new ArrayList<>();
-        players.add(boss);
-
-        Game game = createGame(gameId, gameName, boss.getId(), players);
-        setCurrentGame(game); // Set the current game after creating a new game
+        players.add(currentPlayer);
+        Game game = new Game(gameId, gameName, currentPlayer.getId(), players);
+        currentGame = game;
+        games.add(game);
         return game;
     }
 

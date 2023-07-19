@@ -11,41 +11,9 @@ import com.family.app.R;
 
 public class GameListTable extends RecyclerView.Adapter<GameViewHolder> {
     private final GameService gameService;
-    private String playerName;
-    private String playerId;
-    private boolean isInGame;  // flag to check if the player is already in a game
 
-    public String getPlayerName() {
-        return playerName;
-    }
-
-    public void setPlayerName(String playerName) {
-        this.playerName = playerName;
-    }
-
-    public void setPlayerId(String playerId) {
-        this.playerId = playerId;
-    }
-
-    public String getPlayerId() {
-        return playerId;
-    }
-
-    public boolean isInGame() {
-        return isInGame;
-    }
-
-    public void setInGame(boolean inGame) {
-        isInGame = inGame;
-    }
-
-
-
-    public GameListTable(GameService gameService, String playerName, String playerId) {
+    public GameListTable(GameService gameService) {
         this.gameService = gameService;
-        this.playerName = playerName;
-        this.playerId = playerId;
-        this.isInGame = false;
     }
 
     @Override
@@ -59,16 +27,17 @@ public class GameListTable extends RecyclerView.Adapter<GameViewHolder> {
         Game game = gameService.getGames().get(position);
         holder.gameName.setText(game.getName());
         holder.playerCount.setText(String.valueOf(game.getPlayers().size()));
+        Player currentPlayer = gameService.getCurrentPlayer();
+        String currentPlayerId = currentPlayer.getId();
 
         holder.connectButton.setOnClickListener(v -> {
-            if (!isInGame && game.getPlayers().size() < 4 && !game.hasPlayer(playerId)) {
-                gameService.connectToGame(game.getId(), new Player(playerName, "Optional Player Data", playerId));
-                isInGame = true;
+            if ((gameService.getCurrentGame() == null) && game.getPlayers().size() < 4 && !game.hasPlayer(currentPlayerId)) {
+                gameService.connectToGame(game.getId(), new Player(currentPlayer.getName(), game.getId(), currentPlayerId));
                 holder.connectButton.setEnabled(false); // disable the button after the player joins the game
             }
         });
 
-        if (game.getPlayers().size() >= 4 || game.hasPlayer(playerId) || isInGame) {
+        if (game.getPlayers().size() >= 4 || game.hasPlayer(currentPlayerId) || (gameService.getCurrentGame() != null)) {
             holder.connectButton.setEnabled(false);
         } else {
             holder.connectButton.setEnabled(true);
@@ -78,16 +47,6 @@ public class GameListTable extends RecyclerView.Adapter<GameViewHolder> {
     @Override
     public int getItemCount() {
         return gameService.getGames().size();
-    }
-
-    public void updatePlayerName(String playerName) {
-        this.playerName = playerName;
-    }
-
-    // Use this method to update the isInGame flag
-    public void updateGameStatus(boolean isInGame) {
-        this.isInGame = isInGame;
-        notifyDataSetChanged();  // It's necessary to redraw the elements to update the buttons' state
     }
 
 }

@@ -25,16 +25,16 @@ import java.util.concurrent.CountDownLatch;
 
 public class MainActivity extends AppCompatActivity {
 
-    private GameService gameService;
-    private GameListTable gameListTable;
+    private final GameService gameService = GameService.getInstance();
+    private final GameSyncService gameSyncService = new GameSyncService();
+    final CountDownLatch latch = new CountDownLatch(1);
 
+    private GameListTable gameListTable;
+    private RecyclerView gameList;
     private Button newGameButton, cancelGameButton, startGameButton;
     private EditText playerNameInput;
-    private RecyclerView gameList;
     private TextView errorMessage;
-    private GameSyncService gameSyncService;
-    private String currentUserId;
-    final CountDownLatch latch = new CountDownLatch(1);
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,7 +42,6 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_game);
 
         UserUtils.getAdvertisingId(getApplicationContext(), adId -> {
-            currentUserId = adId;
             gameSyncService.findGameByPlayerId(adId, new GameDataCallback() {
                 @Override
                 public void onGameLoaded(Game game) {
@@ -50,17 +49,18 @@ public class MainActivity extends AppCompatActivity {
                         latch.await(); // ждем, пока счетчик CountDownLatch не станет 0
                         if (game != null) {
                             Player playerById = game.getPlayerById(adId);
+                            gameService.setCurrentPlayer(playerById);
                             playerNameInput.setText(playerById.getName());
-                            playerNameInput.setEnabled(false);
                             gameService.setCurrentGame(game);
-                            gameListTable.setInGame(true);
-                            gameListTable.setPlayerName(playerById.getName());
-                            gameListTable.setPlayerId(playerById.getId());
-                            updateUI();
                         } else {
                             // Обрабатываем случай, когда игра не найдена
-                            // ничего не делаем - у нас и так приложение загрузилось как для нового пользователя
+                            String defaultName = UserUtils.generateDefaultName();
+                            Player currentNewPlayer = new Player(defaultName, null, adId);
+                            gameService.setCurrentPlayer(currentNewPlayer);
+                            playerNameInput.setText(defaultName);
+                            gameService.setCurrentGame(null);
                         }
+                        updateUI();
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
@@ -79,9 +79,6 @@ public class MainActivity extends AppCompatActivity {
             });
         });
 
-        gameService = GameService.getInstance();
-        gameSyncService = new GameSyncService();
-
         newGameButton = findViewById(R.id.new_game_button);
         cancelGameButton = findViewById(R.id.cancel_game_button);
         startGameButton = findViewById(R.id.start_game_button);
@@ -89,21 +86,13 @@ public class MainActivity extends AppCompatActivity {
         gameList = findViewById(R.id.game_list);
         gameList.addItemDecoration(new DividerItemDecoration(this, LinearLayoutManager.VERTICAL));
         errorMessage = findViewById(R.id.error_message);
-
         gameList.setLayoutManager(new LinearLayoutManager(this));
-        gameListTable = new GameListTable(gameService, playerNameInput.getText().toString(), currentUserId);
+        gameListTable = new GameListTable(gameService);
         gameList.setAdapter(gameListTable);
 
         newGameButton.setOnClickListener(v -> {
-            String playerName = playerNameInput.getText().toString();
-            if (playerName.isEmpty()) {
-                errorMessage.setText("Введите имя");
-                return;
-            }
-            Game game = gameService.createGame(playerName, currentUserId);
-            playerNameInput.setEnabled(false);
+            Game game = gameService.createGame();
             gameSyncService.saveGame(game);
-            gameListTable.updateGameStatus(true);
             GameDataCallback gameDataCallback = new GameDataCallback() {
                 @Override
                 public void onGameLoaded(Game game) {
@@ -128,24 +117,19 @@ public class MainActivity extends AppCompatActivity {
             if (gameService.getCurrentGame() != null) {
                 gameSyncService.removeGame(gameService.getCurrentGame().getId());
                 gameService.removeGame(gameService.getCurrentGame().getId());
-                playerNameInput.setEnabled(true);
-                gameListTable.updateGameStatus(false);
+                gameService.setCurrentGame(null);
                 updateUI();
             }
         });
 
         startGameButton.setOnClickListener(v -> {
             if (gameService.getCurrentGame() != null) {
-                gameService.startGame(gameService.getCurrentGame().getId());
+                gameService.startGame();
                 gameSyncService.removeGameEventListener();
                 // переходите на новую активность здесь
                 updateUI();
             }
         });
-
-        String defaultName = UserUtils.generateDefaultName();
-        playerNameInput.setText(defaultName);
-        gameListTable.updatePlayerName(defaultName);
 
         playerNameInput.addTextChangedListener(new TextWatcher() {
             @Override
@@ -158,7 +142,7 @@ public class MainActivity extends AppCompatActivity {
                 if (s.toString().trim().isEmpty()) {
                     playerNameInput.setError("Введите имя");
                 } else {
-                    gameListTable.updatePlayerName(s.toString());
+                    gameService.getCurrentPlayer().setName(s.toString());
                 }
             }
 
@@ -194,23 +178,25 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateUI() {
-        Game game = gameService.getCurrentGame();
-        if (game != null) {
-            if (game.isStarted()) {
+        Game currentGame = gameService.getCurrentGame();
+        if (currentGame != null) {
+            if (currentGame.isStarted()) {
                 // Обновите UI для начала игры, возможно, переход на новую активность
             } else {
                 newGameButton.setVisibility(View.GONE);
                 cancelGameButton.setVisibility(View.VISIBLE);
-                if (game.getPlayers().size() >= 2 && game.getPlayers().size() <= 4) {
+                if (currentGame.getPlayers().size() >= 2 && currentGame.getPlayers().size() <= 4) {
                     startGameButton.setVisibility(View.VISIBLE);
                 } else {
                     startGameButton.setVisibility(View.GONE);
                 }
             }
+            playerNameInput.setEnabled(false);
         } else {
             newGameButton.setVisibility(View.VISIBLE);
             cancelGameButton.setVisibility(View.GONE);
             startGameButton.setVisibility(View.GONE);
+            playerNameInput.setEnabled(true);
         }
         gameListTable.notifyDataSetChanged();
     }

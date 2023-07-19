@@ -51,8 +51,8 @@ public class Game {
     }
 
     public boolean startGame() {
-        if (players.size() < 2) {
-            return false; // Not enough players to start the game
+        if ((players.size() < 2) || (players.size() > 4)) {
+            return false;
         }
 
         isStarted = true;
@@ -61,6 +61,10 @@ public class Game {
 
     public boolean isStarted() {
         return isStarted;
+    }
+
+    public void setStarted(boolean started) {
+        isStarted = started;
     }
 
     public boolean hasPlayer(String playerId) {
