@@ -1,5 +1,6 @@
 package com.family.activity;
 
+import android.content.Context;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -25,7 +26,7 @@ import java.util.concurrent.CountDownLatch;
 
 public class MainActivity extends AppCompatActivity {
 
-    private final GameService gameService = GameService.getInstance();
+    private GameService gameService;
     private final GameSyncService gameSyncService = new GameSyncService();
     final CountDownLatch latch = new CountDownLatch(1);
 
@@ -40,8 +41,10 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_game);
+        Context applicationContext = getApplicationContext();
+        gameService = GameService.getInstance(applicationContext);
 
-        UserUtils.getAdvertisingId(getApplicationContext(), adId -> {
+        UserUtils.getAdvertisingId(applicationContext, adId -> {
             gameSyncService.findGameByPlayerId(adId, new GameDataCallback() {
                 @Override
                 public void onGameLoaded(Game game) {

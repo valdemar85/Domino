@@ -1,25 +1,42 @@
 package com.family.service;
 
+import android.content.Context;
+import com.declination.Declinator;
 import com.family.dto.Game;
 import com.family.dto.Player;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
 
 public class GameService {
     private static GameService instance = null;
     private ConnectionRequestListener listener;
+
+    private volatile Declinator declinator;
+    private final Future<?> declinatorInitFuture;
+
     private List<Game> games = new ArrayList<>();
     private Game currentGame;
     private Player currentPlayer;
 
-    private GameService() {
+
+    private GameService(final Context applicationContext) {
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
+        declinatorInitFuture = executorService.submit(() -> {
+            declinator = Declinator.getInstance(applicationContext);
+        });
+        executorService.shutdown();
     }
 
-    public static GameService getInstance() {
+    public static GameService getInstance(Context applicationContext) {
         if (instance == null) {
-            instance = new GameService();
+            instance = new GameService(applicationContext);
         }
         return instance;
     }
@@ -149,7 +166,13 @@ public class GameService {
 
     public Game createGame() {
         String gameId = UUID.randomUUID().toString();
-        String gameName = currentPlayer.getName() + "'s Game";
+        String declinedName;
+        try {
+            declinedName = getDeclinator().makeNameGenitive(currentPlayer.getName());
+        } catch (InterruptedException | ExecutionException e) {
+            declinedName = currentPlayer.getName();
+        }
+        String gameName = declinedName + " игра";
         List<Player> players = new ArrayList<>();
         players.add(currentPlayer);
         Game game = new Game(gameId, gameName, currentPlayer.getId(), players);
@@ -170,5 +193,11 @@ public class GameService {
                 setCurrentGame(updatedGame);
             }
         }
+    }
+
+    private Declinator getDeclinator() throws InterruptedException, ExecutionException {
+        // Дожидаемся инициализации Declinator
+        declinatorInitFuture.get();
+        return declinator;
     }
 }
