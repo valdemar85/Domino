@@ -9,10 +9,10 @@ import com.family.service.GameService;
 import com.family.dto.Player;
 import com.family.app.R;
 
-public class GameListTable extends RecyclerView.Adapter<GameViewHolder> {
+public class GameListTableAdapter extends RecyclerView.Adapter<GameViewHolder> {
     private final GameService gameService;
 
-    public GameListTable(GameService gameService) {
+    public GameListTableAdapter(GameService gameService) {
         this.gameService = gameService;
     }
 

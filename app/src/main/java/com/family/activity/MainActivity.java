@@ -30,8 +30,10 @@ public class MainActivity extends AppCompatActivity {
     private final GameSyncService gameSyncService = new GameSyncService();
     final CountDownLatch latch = new CountDownLatch(1);
 
-    private GameListTable gameListTable;
+    private GameListTableAdapter gameListTableAdapter;
+    private CurrentGameTableAdapter currentGameTableAdapter;
     private RecyclerView gameList;
+    private RecyclerView currentGameTable;
     private Button newGameButton, cancelGameButton, startGameButton;
     private EditText playerNameInput;
     private TextView errorMessage;
@@ -86,12 +88,19 @@ public class MainActivity extends AppCompatActivity {
         cancelGameButton = findViewById(R.id.cancel_game_button);
         startGameButton = findViewById(R.id.start_game_button);
         playerNameInput = findViewById(R.id.player_name_input);
+        errorMessage = findViewById(R.id.error_message);
+
         gameList = findViewById(R.id.game_list);
         gameList.addItemDecoration(new DividerItemDecoration(this, LinearLayoutManager.VERTICAL));
-        errorMessage = findViewById(R.id.error_message);
         gameList.setLayoutManager(new LinearLayoutManager(this));
-        gameListTable = new GameListTable(gameService);
-        gameList.setAdapter(gameListTable);
+        gameListTableAdapter = new GameListTableAdapter(gameService);
+        gameList.setAdapter(gameListTableAdapter);
+
+        currentGameTable = findViewById(R.id.current_game);
+        currentGameTable.addItemDecoration(new DividerItemDecoration(this, LinearLayoutManager.VERTICAL));
+        currentGameTable.setLayoutManager(new LinearLayoutManager(this));
+        currentGameTableAdapter = new CurrentGameTableAdapter(gameService, gameSyncService);
+        currentGameTable.setAdapter(currentGameTableAdapter);
 
         newGameButton.setOnClickListener(v -> {
             Game game = gameService.createGame();
@@ -201,7 +210,8 @@ public class MainActivity extends AppCompatActivity {
             startGameButton.setVisibility(View.GONE);
             playerNameInput.setEnabled(true);
         }
-        gameListTable.notifyDataSetChanged();
+        gameListTableAdapter.notifyDataSetChanged();
+        currentGameTableAdapter.notifyDataSetChanged();
     }
 
     @Override

@@ -10,34 +10,24 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:padding="5dp" android:background="#A4C0D6">
+            android:padding="5dp" android:background="#C67ED3">
 
         <TextView
-                android:id="@+id/game_name"
+                android:id="@+id/player_name"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:textSize="18sp"
                 android:textStyle="bold"
                 android:textColor="#000000"
-                android:text="Game Name"/>
-
-        <TextView
-                android:id="@+id/player_count"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:textSize="16sp"
-                android:textColor="#000000"
-                android:gravity="center"
-                android:text="Player Count"/>
+                android:text="Player Name"/>
 
         <Button
-                android:id="@+id/connect_button"
+                android:id="@+id/kick_button"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Подключиться"
-                android:textColor="#FFFFFF"/>
+                android:text="Выйти"
+                android:textColor="#FFFFFF" android:textSize="12sp" android:minWidth="50dip"/>
     </LinearLayout>
 
 </androidx.cardview.widget.CardView>

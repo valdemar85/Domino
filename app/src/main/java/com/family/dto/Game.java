@@ -63,6 +63,14 @@ public class Game {
         return isStarted;
     }
 
+    public String getBossId() {
+        return bossId;
+    }
+
+    public void setBossId(String bossId) {
+        this.bossId = bossId;
+    }
+
     public void setStarted(boolean started) {
         isStarted = started;
     }
@@ -75,4 +83,5 @@ public class Game {
         }
         return false;
     }
+
 }

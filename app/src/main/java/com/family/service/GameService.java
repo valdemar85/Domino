@@ -95,21 +95,6 @@ public class GameService {
         connectToGame(gameId, player);
     }
 
-    public boolean kickPlayer(String gameId, Player player) {
-        Game game = findGameById(gameId);
-        if (game == null) {
-            return false; // Game not found
-        }
-
-        List<Player> players = game.getPlayers();
-        if (!players.contains(player)) {
-            return false; // The player is not in the game
-        }
-
-        players.remove(player);
-        return true;
-    }
-
     public boolean addPlayer(String gameId, Player player) {
         Game game = findGameById(gameId);
         if (game == null) {
