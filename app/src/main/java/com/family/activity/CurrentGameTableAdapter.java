@@ -24,7 +24,7 @@ public class CurrentGameTableAdapter extends RecyclerView.Adapter<CurrentGameVie
 
     @Override
     public CurrentGameViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.current_game, parent, false);
+        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.current_game_activity, parent, false);
         return new CurrentGameViewHolder(view);
     }
 

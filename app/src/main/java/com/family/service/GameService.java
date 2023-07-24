@@ -157,7 +157,7 @@ public class GameService {
         } catch (InterruptedException | ExecutionException e) {
             declinedName = currentPlayer.getName();
         }
-        String gameName = declinedName + " игра";
+        String gameName = declinedName + " команда";
         List<Player> players = new ArrayList<>();
         players.add(currentPlayer);
         Game game = new Game(gameId, gameName, currentPlayer.getId(), players);

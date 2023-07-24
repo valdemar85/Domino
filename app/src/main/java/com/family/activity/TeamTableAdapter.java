@@ -9,21 +9,21 @@ import com.family.service.GameService;
 import com.family.dto.Player;
 import com.family.app.R;
 
-public class GameListTableAdapter extends RecyclerView.Adapter<GameViewHolder> {
+public class TeamTableAdapter extends RecyclerView.Adapter<TeamViewHolder> {
     private final GameService gameService;
 
-    public GameListTableAdapter(GameService gameService) {
+    public TeamTableAdapter(GameService gameService) {
         this.gameService = gameService;
     }
 
     @Override
-    public GameViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_game, parent, false);
-        return new GameViewHolder(view);
+    public TeamViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.team_activity, parent, false);
+        return new TeamViewHolder(view);
     }
 
     @Override
-    public void onBindViewHolder(GameViewHolder holder, int position) {
+    public void onBindViewHolder(TeamViewHolder holder, int position) {
         Game game = gameService.getGames().get(position);
         holder.gameName.setText(game.getName());
         holder.playerCount.setText(String.valueOf(game.getPlayers().size()));

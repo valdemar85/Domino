@@ -30,19 +30,19 @@ public class MainActivity extends AppCompatActivity {
     private final GameSyncService gameSyncService = new GameSyncService();
     final CountDownLatch latch = new CountDownLatch(1);
 
-    private GameListTableAdapter gameListTableAdapter;
+    private TeamTableAdapter teamTableAdapter;
     private CurrentGameTableAdapter currentGameTableAdapter;
-    private RecyclerView gameList;
+    private RecyclerView teamList;
     private RecyclerView currentGameTable;
-    private Button newGameButton, cancelGameButton, startGameButton;
+    private Button newTeamButton, disbandTeamButton, startGameButton;
     private EditText playerNameInput;
-    private TextView errorMessage;
+    private TextView errorMessage, currentTeamName;
 
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_game);
+        setContentView(R.layout.main_activity);
         Context applicationContext = getApplicationContext();
         gameService = GameService.getInstance(applicationContext);
 
@@ -84,17 +84,18 @@ public class MainActivity extends AppCompatActivity {
             });
         });
 
-        newGameButton = findViewById(R.id.new_game_button);
-        cancelGameButton = findViewById(R.id.cancel_game_button);
+        newTeamButton = findViewById(R.id.new_team_button);
+        disbandTeamButton = findViewById(R.id.disband_team_button);
         startGameButton = findViewById(R.id.start_game_button);
         playerNameInput = findViewById(R.id.player_name_input);
         errorMessage = findViewById(R.id.error_message);
+        currentTeamName = findViewById(R.id.current_team_name);
 
-        gameList = findViewById(R.id.game_list);
-        gameList.addItemDecoration(new DividerItemDecoration(this, LinearLayoutManager.VERTICAL));
-        gameList.setLayoutManager(new LinearLayoutManager(this));
-        gameListTableAdapter = new GameListTableAdapter(gameService);
-        gameList.setAdapter(gameListTableAdapter);
+        teamList = findViewById(R.id.team_list);
+        teamList.addItemDecoration(new DividerItemDecoration(this, LinearLayoutManager.VERTICAL));
+        teamList.setLayoutManager(new LinearLayoutManager(this));
+        teamTableAdapter = new TeamTableAdapter(gameService);
+        teamList.setAdapter(teamTableAdapter);
 
         currentGameTable = findViewById(R.id.current_game);
         currentGameTable.addItemDecoration(new DividerItemDecoration(this, LinearLayoutManager.VERTICAL));
@@ -102,7 +103,7 @@ public class MainActivity extends AppCompatActivity {
         currentGameTableAdapter = new CurrentGameTableAdapter(gameService, gameSyncService);
         currentGameTable.setAdapter(currentGameTableAdapter);
 
-        newGameButton.setOnClickListener(v -> {
+        newTeamButton.setOnClickListener(v -> {
             Game game = gameService.createGame();
             gameSyncService.saveGame(game);
             GameDataCallback gameDataCallback = new GameDataCallback() {
@@ -125,7 +126,7 @@ public class MainActivity extends AppCompatActivity {
             updateUI();
         });
 
-        cancelGameButton.setOnClickListener(v -> {
+        disbandTeamButton.setOnClickListener(v -> {
             if (gameService.getCurrentGame() != null) {
                 gameSyncService.removeGame(gameService.getCurrentGame().getId());
                 gameService.removeGame(gameService.getCurrentGame().getId());
@@ -173,7 +174,7 @@ public class MainActivity extends AppCompatActivity {
                 // Обновление списка игр в RecyclerView
                 gameService.setGames(games);
                 errorMessage.setVisibility(View.GONE);
-                gameList.setVisibility(View.VISIBLE);
+                teamList.setVisibility(View.VISIBLE);
                 updateUI();
                 latch.countDown(); // уменьшаем счетчик на 1
             }
@@ -183,7 +184,7 @@ public class MainActivity extends AppCompatActivity {
                 // Показ сообщения об ошибке
                 errorMessage.setText("Ошибка загрузки таблицы: " + error);
                 errorMessage.setVisibility(View.VISIBLE);
-                gameList.setVisibility(View.GONE);
+                teamList.setVisibility(View.GONE);
                 latch.countDown(); // уменьшаем счетчик на 1
             }
         });
@@ -195,8 +196,8 @@ public class MainActivity extends AppCompatActivity {
             if (currentGame.isStarted()) {
                 // Обновите UI для начала игры, возможно, переход на новую активность
             } else {
-                newGameButton.setVisibility(View.GONE);
-                cancelGameButton.setVisibility(View.VISIBLE);
+                newTeamButton.setVisibility(View.GONE);
+                disbandTeamButton.setVisibility(View.VISIBLE);
                 if (currentGame.getPlayers().size() >= 2 && currentGame.getPlayers().size() <= 4) {
                     startGameButton.setVisibility(View.VISIBLE);
                 } else {
@@ -204,13 +205,17 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
             playerNameInput.setEnabled(false);
+            currentTeamName.setText(currentGame.getName());
+            currentTeamName.setVisibility(View.VISIBLE);
         } else {
-            newGameButton.setVisibility(View.VISIBLE);
-            cancelGameButton.setVisibility(View.GONE);
+            newTeamButton.setVisibility(View.VISIBLE);
+            disbandTeamButton.setVisibility(View.GONE);
             startGameButton.setVisibility(View.GONE);
             playerNameInput.setEnabled(true);
+            currentTeamName.setText("");
+            currentTeamName.setVisibility(View.GONE);
         }
-        gameListTableAdapter.notifyDataSetChanged();
+        teamTableAdapter.notifyDataSetChanged();
         currentGameTableAdapter.notifyDataSetChanged();
     }
 
@@ -240,7 +245,7 @@ public class MainActivity extends AppCompatActivity {
                     // handle error
                     errorMessage.setText("Sync error: " + error);
                     errorMessage.setVisibility(View.VISIBLE);
-                    gameList.setVisibility(View.GONE);
+                    teamList.setVisibility(View.GONE);
                 }
             }, gameService.getCurrentGame().getId());
         }

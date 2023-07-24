@@ -6,11 +6,11 @@ import android.widget.TextView;
 import androidx.recyclerview.widget.RecyclerView;
 import com.family.app.R;
 
-public class GameViewHolder extends RecyclerView.ViewHolder {
+public class TeamViewHolder extends RecyclerView.ViewHolder {
     TextView gameName, playerCount;
     Button connectButton;
 
-    public GameViewHolder(View itemView) {
+    public TeamViewHolder(View itemView) {
         super(itemView);
         gameName = itemView.findViewById(R.id.game_name);
         playerCount = itemView.findViewById(R.id.player_count);
