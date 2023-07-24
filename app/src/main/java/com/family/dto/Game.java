@@ -1,5 +1,6 @@
 package com.family.dto;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class Game {
@@ -8,7 +9,7 @@ public class Game {
     private String bossId;
     private List<Player> players;
     private boolean isStarted;
-
+    private List<Message> messages = new ArrayList<>();
 
     // No-argument constructor
     public Game() {}
@@ -82,6 +83,18 @@ public class Game {
             }
         }
         return false;
+    }
+
+    public List<Message> getMessages() {
+        return messages;
+    }
+
+    public void setMessages(List<Message> messages) {
+        this.messages = messages;
+    }
+
+    public void addMessage(Message message) {
+        this.messages.add(message);
     }
 
 }

@@ -2,12 +2,15 @@ package com.family.activity;
 
 import android.content.Context;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -16,6 +19,7 @@ import com.family.app.*;
 import com.family.callbacks.GameDataCallback;
 import com.family.callbacks.GamesDataCallback;
 import com.family.dto.Game;
+import com.family.dto.Message;
 import com.family.dto.Player;
 import com.family.service.GameService;
 import com.family.service.GameSyncService;
@@ -23,6 +27,9 @@ import com.family.utils.UserUtils;
 
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+
+import static com.family.dto.Message.ALERT;
+import static com.family.dto.Message.TEAM_PARTICIPATION_REQUEST;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -94,7 +101,7 @@ public class MainActivity extends AppCompatActivity {
         teamList = findViewById(R.id.team_list);
         teamList.addItemDecoration(new DividerItemDecoration(this, LinearLayoutManager.VERTICAL));
         teamList.setLayoutManager(new LinearLayoutManager(this));
-        teamTableAdapter = new TeamTableAdapter(gameService);
+        teamTableAdapter = new TeamTableAdapter(gameService, gameSyncService);
         teamList.setAdapter(teamTableAdapter);
 
         currentGameTable = findViewById(R.id.current_game);
@@ -207,6 +214,7 @@ public class MainActivity extends AppCompatActivity {
             playerNameInput.setEnabled(false);
             currentTeamName.setText(currentGame.getName());
             currentTeamName.setVisibility(View.VISIBLE);
+            precessMessages(currentGame);
         } else {
             newTeamButton.setVisibility(View.VISIBLE);
             disbandTeamButton.setVisibility(View.GONE);
@@ -250,4 +258,83 @@ public class MainActivity extends AppCompatActivity {
             }, gameService.getCurrentGame().getId());
         }
     }
+
+    private void precessMessages(Game currentGame) {
+        List<Message> messages = currentGame.getMessages();
+        for (Message message: messages) {
+            if (message.getToId().equals(gameService.getCurrentPlayer().getId())) {
+                if (message.getMessageType().equals(TEAM_PARTICIPATION_REQUEST)) {
+                    alertBossTeamParticipationRequest(message.getFromId(), message.getFromName(), currentGame);
+                } else if (message.getMessageType().equals(ALERT)) {
+                    processAlertMessage(message.getMessageText());
+                }
+                messages.remove(message);
+                gameSyncService.saveGame(currentGame);
+                break;
+            }
+        }
+    }
+
+    private void processAlertMessage(String textMessageToShow) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Уведомление");
+        builder.setMessage(textMessageToShow);
+
+        // Устанавливаем обработчик для кнопки "OK"
+        builder.setPositiveButton("OK", (dialog, which) -> {
+            // Если пользователь нажимает "OK", закрываем диалоговое окно
+            dialog.dismiss();
+        });
+
+        // Показываем диалоговое окно
+        AlertDialog dialog = builder.create();
+        dialog.show();
+    }
+
+    // Это может быть в вашем Activity или Fragment, где отображается экран лидера команды
+    private void alertBossTeamParticipationRequest(String playerId, String playerName, Game game) {
+        // Создаем диалоговое окно
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Запрос на присоединение к команде");
+        builder.setMessage(playerName + " хочет в вашу команду");
+
+        // Устанавливаем обработчики для кнопок диалогового окна
+        builder.setPositiveButton("Одобрить", (dialog, which) -> {
+            // Если лидер нажимает "Одобрить", подключаем игрока к команде
+            gameService.addPlayerToCurrentGame(new Player(playerName, game.getId(), playerId));
+            gameSyncService.saveGame(game);
+        });
+
+        builder.setNegativeButton("Отказать", (dialog, which) -> {
+            // Если лидер нажимает "Отказать", ничего не делаем
+            // отправить игроку уведомление об отказе здесь
+//            Player currentPlayer = gameService.getCurrentPlayer();
+//            Message message = new Message(currentPlayer.getId(), currentPlayer.getName(), playerId, ALERT);
+//            message.setMessageText("Вам отказано");
+//            gameService.getCurrentGame().addMessage(message);
+//            gameSyncService.saveGame(gameService.getCurrentGame());
+        });
+
+        // Устанавливаем таймаут для автоматического отказа
+        final AlertDialog dialog = builder.create();
+        dialog.show();
+
+        final Handler handler  = new Handler(Looper.getMainLooper());
+        final Runnable runnable = () -> {
+            if (dialog.isShowing()) {
+                dialog.dismiss();
+                // send a notification of denial to the player here
+                Player currentPlayer = gameService.getCurrentPlayer();
+                Message message = new Message(currentPlayer.getId(), currentPlayer.getName(), playerId, ALERT);
+                message.setMessageText("Истекло время на одобрение");
+                gameService.getCurrentGame().addMessage(message);
+                gameSyncService.saveGame(gameService.getCurrentGame());
+            }
+        };
+
+        dialog.setOnDismissListener(dialogInterface -> handler.removeCallbacks(runnable));
+
+        handler.postDelayed(runnable, 15000);
+    }
+
 }

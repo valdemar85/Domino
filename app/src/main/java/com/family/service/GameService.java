@@ -67,45 +67,11 @@ public class GameService {
         return null;
     }
 
-    public boolean connectToGame(String gameId, Player player) {
-        Game game = findGameById(gameId);
-        if (game == null) {
-            if (listener != null) {
-                listener.onConnectionRequestRejected(player, game);
-            }
-            return false; // Game not found
-        }
-
-        List<Player> players = game.getPlayers();
+    public boolean addPlayerToCurrentGame(Player player) {
+        List<Player> players = currentGame.getPlayers();
         if (players.size() >= 4 || players.contains(player)) {
-            if (listener != null) {
-                listener.onConnectionRequestRejected(player, game);
-            }
             return false; // The game is already full or the player is already in the game
         }
-
-        players.add(player);
-        if (listener != null) {
-            listener.onConnectionRequestApproved(player, game);
-        }
-        return true;
-    }
-
-    public void handleRequest(String gameId, Player player) {
-        connectToGame(gameId, player);
-    }
-
-    public boolean addPlayer(String gameId, Player player) {
-        Game game = findGameById(gameId);
-        if (game == null) {
-            return false; // Game not found
-        }
-
-        List<Player> players = game.getPlayers();
-        if (players.contains(player)) {
-            return false; // The player is already in the game
-        }
-
         players.add(player);
         return true;
     }
