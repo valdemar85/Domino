@@ -25,6 +25,7 @@ import com.family.service.GameService;
 import com.family.service.GameSyncService;
 import com.family.utils.UserUtils;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
@@ -261,14 +262,16 @@ public class MainActivity extends AppCompatActivity {
 
     private void precessMessages(Game currentGame) {
         List<Message> messages = currentGame.getMessages();
-        for (Message message: messages) {
+        Iterator<Message> it = messages.iterator();
+        while (it.hasNext()) {
+            Message message = it.next();
             if (message.getToId().equals(gameService.getCurrentPlayer().getId())) {
                 if (message.getMessageType().equals(TEAM_PARTICIPATION_REQUEST)) {
                     alertBossTeamParticipationRequest(message.getFromId(), message.getFromName(), currentGame);
                 } else if (message.getMessageType().equals(ALERT)) {
                     processAlertMessage(message.getMessageText());
                 }
-                messages.remove(message);
+                it.remove();
                 gameSyncService.saveGame(currentGame);
                 break;
             }
