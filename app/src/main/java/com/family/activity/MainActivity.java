@@ -27,7 +27,6 @@ import com.family.utils.UserUtils;
 
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 
 import static com.family.dto.Message.ALERT;
 import static com.family.dto.Message.TEAM_PARTICIPATION_REQUEST;
@@ -36,7 +35,10 @@ public class MainActivity extends AppCompatActivity {
 
     private GameService gameService;
     private final GameSyncService gameSyncService = new GameSyncService();
-    final CountDownLatch latch = new CountDownLatch(1);
+
+    private String cachedAdId;
+    private boolean gamesAttempted = false;
+    private boolean playerInitialized = false;
 
     private TeamTableAdapter teamTableAdapter;
     private CurrentGameTableAdapter currentGameTableAdapter;
@@ -54,43 +56,10 @@ public class MainActivity extends AppCompatActivity {
         Context applicationContext = getApplicationContext();
         gameService = GameService.getInstance(applicationContext);
 
-        UserUtils.getAdvertisingId(applicationContext, adId -> {
-            gameSyncService.findGameByPlayerId(adId, new GameDataCallback() {
-                @Override
-                public void onGameLoaded(Game game) {
-                    try {
-                        latch.await(); // ждем, пока счетчик CountDownLatch не станет 0
-                        if (game != null) {
-                            Player playerById = game.getPlayerById(adId);
-                            gameService.setCurrentPlayer(playerById);
-                            playerNameInput.setText(playerById.getName());
-                            gameService.setCurrentGame(game);
-                        } else {
-                            // Обрабатываем случай, когда игра не найдена
-                            String defaultName = UserUtils.generateDefaultName();
-                            Player currentNewPlayer = new Player(defaultName, null, adId);
-                            gameService.setCurrentPlayer(currentNewPlayer);
-                            playerNameInput.setText(defaultName);
-                            gameService.setCurrentGame(null);
-                        }
-                        updateUI();
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-
-                @Override
-                public void onDataNotAvailable(String error) {
-                    try {
-                        latch.await(); // ждем, пока счетчик CountDownLatch не станет 0
-                        errorMessage.setText("Ошибка загрузки игры: " + error);
-                        errorMessage.setVisibility(View.VISIBLE);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-            });
-        });
+        UserUtils.getAdvertisingId(applicationContext, adId -> runOnUiThread(() -> {
+            cachedAdId = adId;
+            tryInitPlayer();
+        }));
 
         newTeamButton = findViewById(R.id.new_team_button);
         disbandTeamButton = findViewById(R.id.disband_team_button);
@@ -175,6 +144,36 @@ public class MainActivity extends AppCompatActivity {
         loadUnstartedGames();
     }
 
+    private void tryInitPlayer() {
+        if (cachedAdId == null || !gamesAttempted || playerInitialized) return;
+        playerInitialized = true;
+        String adId = cachedAdId;
+        gameSyncService.findGameByPlayerId(adId, new GameDataCallback() {
+            @Override
+            public void onGameLoaded(Game game) {
+                if (game != null) {
+                    Player playerById = game.getPlayerById(adId);
+                    gameService.setCurrentPlayer(playerById);
+                    playerNameInput.setText(playerById.getName());
+                    gameService.setCurrentGame(game);
+                } else {
+                    String defaultName = UserUtils.generateDefaultName();
+                    Player currentNewPlayer = new Player(defaultName, null, adId);
+                    gameService.setCurrentPlayer(currentNewPlayer);
+                    playerNameInput.setText(defaultName);
+                    gameService.setCurrentGame(null);
+                }
+                updateUI();
+            }
+
+            @Override
+            public void onDataNotAvailable(String error) {
+                errorMessage.setText("Ошибка загрузки игры: " + error);
+                errorMessage.setVisibility(View.VISIBLE);
+            }
+        });
+    }
+
     private void loadUnstartedGames() {
         gameSyncService.getAllUnstartedGames(new GamesDataCallback() {
             @Override
@@ -184,7 +183,8 @@ public class MainActivity extends AppCompatActivity {
                 errorMessage.setVisibility(View.GONE);
                 teamList.setVisibility(View.VISIBLE);
                 updateUI();
-                latch.countDown(); // уменьшаем счетчик на 1
+                gamesAttempted = true;
+                tryInitPlayer();
             }
 
             @Override
@@ -193,7 +193,8 @@ public class MainActivity extends AppCompatActivity {
                 errorMessage.setText("Ошибка загрузки таблицы: " + error);
                 errorMessage.setVisibility(View.VISIBLE);
                 teamList.setVisibility(View.GONE);
-                latch.countDown(); // уменьшаем счетчик на 1
+                gamesAttempted = true;
+                tryInitPlayer();
             }
         });
     }
