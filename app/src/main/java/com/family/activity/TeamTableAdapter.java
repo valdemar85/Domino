@@ -34,7 +34,13 @@ public class TeamTableAdapter extends RecyclerView.Adapter<TeamViewHolder> {
         Game game = gameService.getGames().get(position);
         holder.gameName.setText(game.getName());
         holder.playerCount.setText(String.valueOf(game.getPlayers().size()));
+
         Player currentPlayer = gameService.getCurrentPlayer();
+        if (currentPlayer == null) {
+            holder.connectButton.setEnabled(false);
+            holder.connectButton.setOnClickListener(null);
+            return;
+        }
         String currentPlayerId = currentPlayer.getId();
 
         holder.connectButton.setOnClickListener(v -> {
@@ -42,8 +48,6 @@ public class TeamTableAdapter extends RecyclerView.Adapter<TeamViewHolder> {
                 Message message = new Message(currentPlayerId, currentPlayer.getName(), game.getBossId(), TEAM_PARTICIPATION_REQUEST);
                 game.addMessage(message);
                 gameSyncService.saveGame(game);
-                //gameService.connectToGame(game.getId(), new Player(currentPlayer.getName(), game.getId(), currentPlayerId));
-                // код, открывающий окно
                 holder.connectButton.setEnabled(false); // disable the button after the player joins the game
             }
         });

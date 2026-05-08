@@ -39,10 +39,18 @@ public class Game {
     }
 
     public List<Player> getPlayers() {
+        if (players == null) {
+            players = new ArrayList<>();
+        }
         return players;
     }
 
+    public void setPlayers(List<Player> players) {
+        this.players = players;
+    }
+
     public Player getPlayerById(String playerId) {
+        if (players == null) return null;
         for (Player player : players) {
             if (player.getId().equals(playerId)) {
                 return player;
@@ -52,7 +60,8 @@ public class Game {
     }
 
     public boolean startGame() {
-        if ((players.size() < 2) || (players.size() > 4)) {
+        int size = (players == null) ? 0 : players.size();
+        if (size < 2 || size > 4) {
             return false;
         }
 
@@ -77,6 +86,7 @@ public class Game {
     }
 
     public boolean hasPlayer(String playerId) {
+        if (players == null) return false;
         for (Player player : players) {
             if (player.getId().equals(playerId)) {
                 return true;
@@ -86,6 +96,9 @@ public class Game {
     }
 
     public List<Message> getMessages() {
+        if (messages == null) {
+            messages = new ArrayList<>();
+        }
         return messages;
     }
 
@@ -94,6 +107,9 @@ public class Game {
     }
 
     public void addMessage(Message message) {
+        if (this.messages == null) {
+            this.messages = new ArrayList<>();
+        }
         this.messages.add(message);
     }
 

@@ -38,17 +38,23 @@ public class CurrentGameTableAdapter extends RecyclerView.Adapter<CurrentGameVie
         holder.playerName.setText(player.getName());
 
         Player currentPlayer = gameService.getCurrentPlayer();
+        if (currentPlayer == null) {
+            holder.kickButton.setVisibility(View.GONE);
+            holder.kickButton.setOnClickListener(null);
+            return;
+        }
         String currentPlayerId = currentPlayer.getId();
 
         if ((currentGame.getBossId().equals(player.getId())) || (!currentGame.getBossId().equals(currentPlayerId))) {
             holder.kickButton.setVisibility(View.GONE);
+        } else {
+            holder.kickButton.setVisibility(View.VISIBLE);
         }
 
         holder.kickButton.setOnClickListener(v -> {
             if ((player.getId().equals(currentPlayerId)) || currentGame.getBossId().equals(currentPlayerId)) {
                 currentGame.getPlayers().remove(position);
                 if (isEmpty(currentGame.getPlayers())) {
-                    gameService.setCurrentGame(null);
                     gameService.removeGame(currentGame.getId());
                     gameSyncService.removeGame(currentGame.getId());
                 } else {

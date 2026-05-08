@@ -15,7 +15,6 @@ import java.util.List;
 public class GameSyncService {
     public static final String GAMES_TABLE_NAME = "games";
     private ValueEventListener gameEventListener;
-    private ValueEventListener playerGameListener;
 
     public GameSyncService() {
     }
@@ -79,6 +78,10 @@ public class GameSyncService {
     public void getAllUnstartedGames(final GamesDataCallback callback) {
         DatabaseReference gamesRef = FirebaseDatabase.getInstance().getReference(GAMES_TABLE_NAME);
 
+        if (gameEventListener != null) {
+            gamesRef.removeEventListener(gameEventListener);
+        }
+
         gameEventListener = gamesRef.addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
@@ -103,14 +106,12 @@ public class GameSyncService {
     public void findGameByPlayerId(String playerId, GameDataCallback callback) {
         DatabaseReference gamesRef = FirebaseDatabase.getInstance().getReference(GAMES_TABLE_NAME);
 
-        playerGameListener = gamesRef.addValueEventListener(new ValueEventListener() {
+        gamesRef.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
                 for (DataSnapshot gameSnapshot : dataSnapshot.getChildren()) {
                     Game game = gameSnapshot.getValue(Game.class);
                     if (game != null && !game.isStarted() && game.hasPlayer(playerId)) {
-                        gamesRef.removeEventListener(this); // Удалить слушатель, так как мы нашли нужную игру
-                        playerGameListener = null;
                         callback.onGameLoaded(game);
                         return;
                     }
@@ -129,14 +130,9 @@ public class GameSyncService {
 
     // Метод для удаления слушателя базы данных
     public void removeGameEventListener() {
-        DatabaseReference gamesRef = FirebaseDatabase.getInstance().getReference(GAMES_TABLE_NAME);
         if (gameEventListener != null) {
-            gamesRef.removeEventListener(gameEventListener);
+            FirebaseDatabase.getInstance().getReference(GAMES_TABLE_NAME).removeEventListener(gameEventListener);
             gameEventListener = null;
-        }
-        if (playerGameListener != null) {
-            gamesRef.removeEventListener(playerGameListener);
-            playerGameListener = null;
         }
     }
 }

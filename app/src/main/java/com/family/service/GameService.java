@@ -68,6 +68,9 @@ public class GameService {
     }
 
     public boolean addPlayerToCurrentGame(Player player) {
+        if (currentGame == null || player == null) {
+            return false;
+        }
         List<Player> players = currentGame.getPlayers();
         if (players.size() >= 4 || players.contains(player)) {
             return false; // The game is already full or the player is already in the game
@@ -107,10 +110,12 @@ public class GameService {
     }
 
     public boolean removeGame(String gameId) {
-        currentGame = null;
         Game game = findGameById(gameId);
         if (game == null) {
             return false; // Game not found
+        }
+        if (currentGame != null && currentGame.getId().equals(gameId)) {
+            currentGame = null;
         }
         return games.remove(game);
     }

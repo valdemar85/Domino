@@ -105,10 +105,10 @@ public class MainActivity extends AppCompatActivity {
         });
 
         disbandTeamButton.setOnClickListener(v -> {
-            if (gameService.getCurrentGame() != null) {
-                gameSyncService.removeGame(gameService.getCurrentGame().getId());
-                gameService.removeGame(gameService.getCurrentGame().getId());
-                gameService.setCurrentGame(null);
+            Game current = gameService.getCurrentGame();
+            if (current != null) {
+                gameSyncService.removeGame(current.getId());
+                gameService.removeGame(current.getId());
                 updateUI();
             }
         });
@@ -133,7 +133,10 @@ public class MainActivity extends AppCompatActivity {
                 if (s.toString().trim().isEmpty()) {
                     playerNameInput.setError("Введите имя");
                 } else {
-                    gameService.getCurrentPlayer().setName(s.toString());
+                    Player current = gameService.getCurrentPlayer();
+                    if (current != null) {
+                        current.setName(s.toString());
+                    }
                 }
             }
 
@@ -159,7 +162,7 @@ public class MainActivity extends AppCompatActivity {
                     gameService.setCurrentGame(game);
                 } else {
                     String defaultName = UserUtils.generateDefaultName();
-                    Player currentNewPlayer = new Player(defaultName, null, adId);
+                    Player currentNewPlayer = new Player(defaultName, adId);
                     gameService.setCurrentPlayer(currentNewPlayer);
                     playerNameInput.setText(defaultName);
                     gameService.setCurrentGame(null);
@@ -310,8 +313,9 @@ public class MainActivity extends AppCompatActivity {
         // Устанавливаем обработчики для кнопок диалогового окна
         builder.setPositiveButton("Одобрить", (dialog, which) -> {
             // Если лидер нажимает "Одобрить", подключаем игрока к команде
-            gameService.addPlayerToCurrentGame(new Player(playerName, game.getId(), playerId));
-            gameSyncService.saveGame(game);
+            if (gameService.addPlayerToCurrentGame(new Player(playerName, playerId))) {
+                gameSyncService.saveGame(game);
+            }
         });
 
         builder.setNegativeButton("Отказать", (dialog, which) -> {
@@ -334,10 +338,12 @@ public class MainActivity extends AppCompatActivity {
                 dialog.dismiss();
                 // send a notification of denial to the player here
                 Player currentPlayer = gameService.getCurrentPlayer();
+                Game currentGame = gameService.getCurrentGame();
+                if (currentPlayer == null || currentGame == null) return;
                 Message message = new Message(currentPlayer.getId(), currentPlayer.getName(), playerId, ALERT);
                 message.setMessageText("Истекло время на одобрение");
-                gameService.getCurrentGame().addMessage(message);
-                gameSyncService.saveGame(gameService.getCurrentGame());
+                currentGame.addMessage(message);
+                gameSyncService.saveGame(currentGame);
             }
         };
 

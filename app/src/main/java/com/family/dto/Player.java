@@ -1,17 +1,17 @@
 package com.family.dto;
 
+import java.util.Objects;
+
 public class Player {
     private String id;
     private String name;
-    private String gameId;
 
     // No-argument constructor
     public Player() {}
 
-    public Player(String name, String gameId, String playerId) {
+    public Player(String name, String playerId) {
         this.id = playerId;
         this.name = name;
-        this.gameId = gameId;
     }
 
     public String getName() {
@@ -30,4 +30,16 @@ public class Player {
         this.id = id;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Player)) return false;
+        Player other = (Player) o;
+        return Objects.equals(id, other.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
 }
