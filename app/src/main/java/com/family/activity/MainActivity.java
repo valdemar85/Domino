@@ -38,6 +38,7 @@ public class MainActivity extends AppCompatActivity {
 
     private String cachedAdId;
     private boolean gamesAttempted = false;
+    private boolean playerInitPending = false;
     private boolean playerInitialized = false;
 
     private TeamTableAdapter teamTableAdapter;
@@ -145,8 +146,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void tryInitPlayer() {
-        if (cachedAdId == null || !gamesAttempted || playerInitialized) return;
-        playerInitialized = true;
+        if (cachedAdId == null || !gamesAttempted || playerInitialized || playerInitPending) return;
+        playerInitPending = true;
         String adId = cachedAdId;
         gameSyncService.findGameByPlayerId(adId, new GameDataCallback() {
             @Override
@@ -163,11 +164,13 @@ public class MainActivity extends AppCompatActivity {
                     playerNameInput.setText(defaultName);
                     gameService.setCurrentGame(null);
                 }
+                playerInitialized = true;
                 updateUI();
             }
 
             @Override
             public void onDataNotAvailable(String error) {
+                playerInitialized = true;
                 errorMessage.setText("Ошибка загрузки игры: " + error);
                 errorMessage.setVisibility(View.VISIBLE);
             }
@@ -182,9 +185,11 @@ public class MainActivity extends AppCompatActivity {
                 gameService.setGames(games);
                 errorMessage.setVisibility(View.GONE);
                 teamList.setVisibility(View.VISIBLE);
-                updateUI();
                 gamesAttempted = true;
                 tryInitPlayer();
+                if (gameService.getCurrentPlayer() != null) {
+                    updateUI();
+                }
             }
 
             @Override
