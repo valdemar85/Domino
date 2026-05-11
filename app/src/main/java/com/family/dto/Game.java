@@ -10,6 +10,7 @@ public class Game {
     private List<Player> players;
     private boolean isStarted;
     private List<Message> messages = new ArrayList<>();
+    private long createdAt;
 
     // No-argument constructor
     public Game() {}
@@ -20,6 +21,16 @@ public class Game {
         this.bossId = bossId;
         this.players = players;
         this.isStarted = false;  // The game is not started initially
+        // createdAt is set by GameService.createGame() using Firebase server-corrected time
+        // so it stays consistent across devices regardless of local clock skew.
+    }
+
+    public long getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(long createdAt) {
+        this.createdAt = createdAt;
     }
 
     public String getId() {

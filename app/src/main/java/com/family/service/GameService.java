@@ -56,6 +56,17 @@ public class GameService {
 
     public void setGames(List<Game> games) {
         this.games = games;
+        if (currentGame != null) {
+            Game refreshed = findGameById(currentGame.getId());
+            if (refreshed != null
+                    && currentPlayer != null
+                    && !refreshed.hasPlayer(currentPlayer.getId())) {
+                // We were kicked from the team or it was reformed without us
+                currentGame = null;
+            } else {
+                currentGame = refreshed;
+            }
+        }
     }
 
     public Game findGameById(String id) {
@@ -132,6 +143,9 @@ public class GameService {
         List<Player> players = new ArrayList<>();
         players.add(currentPlayer);
         Game game = new Game(gameId, gameName, currentPlayer.getId(), players);
+        // Use Firebase server-corrected time so the same instant is recorded regardless
+        // of how this device's local clock compares to other players' clocks.
+        game.setCreatedAt(GameSyncService.getInstance().currentServerTimeMillis());
         currentGame = game;
         games.add(game);
         return game;

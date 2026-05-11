@@ -16,7 +16,6 @@ import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.family.app.*;
-import com.family.callbacks.GameDataCallback;
 import com.family.callbacks.GamesDataCallback;
 import com.family.dto.Game;
 import com.family.dto.Message;
@@ -34,12 +33,9 @@ import static com.family.dto.Message.TEAM_PARTICIPATION_REQUEST;
 public class MainActivity extends AppCompatActivity {
 
     private GameService gameService;
-    private final GameSyncService gameSyncService = new GameSyncService();
+    private final GameSyncService gameSyncService = GameSyncService.getInstance();
 
-    private String cachedAdId;
-    private boolean gamesAttempted = false;
-    private boolean playerInitPending = false;
-    private boolean playerInitialized = false;
+    private String userId;
 
     private TeamTableAdapter teamTableAdapter;
     private CurrentGameTableAdapter currentGameTableAdapter;
@@ -49,6 +45,36 @@ public class MainActivity extends AppCompatActivity {
     private EditText playerNameInput;
     private TextView errorMessage, currentTeamName;
 
+    private final GamesDataCallback gamesCallback = new GamesDataCallback() {
+        @Override
+        public void onGamesLoaded(List<Game> games) {
+            gameService.setGames(games);
+            if (errorMessage.getVisibility() == View.VISIBLE
+                    && errorMessage.getText().toString().startsWith("Ошибка загрузки таблицы")) {
+                errorMessage.setVisibility(View.GONE);
+            }
+            teamList.setVisibility(View.VISIBLE);
+            resolvePlayerState();
+        }
+
+        @Override
+        public void onDataNotAvailable(String error) {
+            errorMessage.setText("Ошибка загрузки таблицы: " + error);
+            errorMessage.setVisibility(View.VISIBLE);
+            teamList.setVisibility(View.GONE);
+        }
+    };
+
+    private final GameSyncService.ConnectionCallback connectionCallback = connected -> runOnUiThread(() -> {
+        if (!connected) {
+            errorMessage.setText("Нет связи с сервером — изменения могут не сохраняться");
+            errorMessage.setVisibility(View.VISIBLE);
+        } else if (errorMessage.getVisibility() == View.VISIBLE
+                && errorMessage.getText().toString().startsWith("Нет связи")) {
+            errorMessage.setVisibility(View.GONE);
+        }
+    });
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -56,11 +82,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.main_activity);
         Context applicationContext = getApplicationContext();
         gameService = GameService.getInstance(applicationContext);
-
-        UserUtils.getAdvertisingId(applicationContext, adId -> runOnUiThread(() -> {
-            cachedAdId = adId;
-            tryInitPlayer();
-        }));
+        userId = UserUtils.resolveUserId(applicationContext);
 
         newTeamButton = findViewById(R.id.new_team_button);
         disbandTeamButton = findViewById(R.id.disband_team_button);
@@ -82,25 +104,12 @@ public class MainActivity extends AppCompatActivity {
         currentGameTable.setAdapter(currentGameTableAdapter);
 
         newTeamButton.setOnClickListener(v -> {
+            if (gameService.getCurrentPlayer() == null) return;
             Game game = gameService.createGame();
-            gameSyncService.saveGame(game);
-            GameDataCallback gameDataCallback = new GameDataCallback() {
-                @Override
-                public void onGameLoaded(Game game) {
-                    // Если игра успешно загружена, можно обновить UI или выполнить другие действия.
-                    gameService.updateGame(game);
-                    updateUI(); // обновляем интерфейс
-                }
-
-                @Override
-                public void onDataNotAvailable(String error) {
-                    // Если данные не доступны, можно показать сообщение об ошибке.
-                    errorMessage.setText("Ошибка загрузки игры: " + error);
-                    errorMessage.setVisibility(View.VISIBLE);
-                }
-            };
-            gameSyncService.syncGame(gameDataCallback, game.getId());
-
+            gameSyncService.saveGame(game, error -> runOnUiThread(() -> {
+                errorMessage.setText("Не удалось сохранить команду: " + error);
+                errorMessage.setVisibility(View.VISIBLE);
+            }));
             updateUI();
         });
 
@@ -114,12 +123,13 @@ public class MainActivity extends AppCompatActivity {
         });
 
         startGameButton.setOnClickListener(v -> {
-            if (gameService.getCurrentGame() != null) {
-                gameService.startGame();
-                gameSyncService.removeGameEventListener();
-                // переходите на новую активность здесь
-                updateUI();
-            }
+            Game current = gameService.getCurrentGame();
+            if (current == null) return;
+            if (!gameService.startGame()) return;
+            // Persist the started=true flag so other team members see the game start too.
+            gameSyncService.saveGame(current);
+            // переходите на новую активность здесь
+            updateUI();
         });
 
         playerNameInput.addTextChangedListener(new TextWatcher() {
@@ -130,13 +140,15 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
-                if (s.toString().trim().isEmpty()) {
+                String text = s.toString();
+                if (text.trim().isEmpty()) {
                     playerNameInput.setError("Введите имя");
                 } else {
                     Player current = gameService.getCurrentPlayer();
                     if (current != null) {
-                        current.setName(s.toString());
+                        current.setName(text);
                     }
+                    UserUtils.saveName(getApplicationContext(), text);
                 }
             }
 
@@ -145,79 +157,72 @@ public class MainActivity extends AppCompatActivity {
                 // No operation needed here
             }
         });
-        loadUnstartedGames();
     }
 
-    private void tryInitPlayer() {
-        if (cachedAdId == null || !gamesAttempted || playerInitialized || playerInitPending) return;
-        playerInitPending = true;
-        String adId = cachedAdId;
-        gameSyncService.findGameByPlayerId(adId, new GameDataCallback() {
-            @Override
-            public void onGameLoaded(Game game) {
-                if (game != null) {
-                    Player playerById = game.getPlayerById(adId);
-                    gameService.setCurrentPlayer(playerById);
-                    playerNameInput.setText(playerById.getName());
-                    gameService.setCurrentGame(game);
-                } else {
-                    String defaultName = UserUtils.generateDefaultName();
-                    Player currentNewPlayer = new Player(defaultName, adId);
-                    gameService.setCurrentPlayer(currentNewPlayer);
-                    playerNameInput.setText(defaultName);
-                    gameService.setCurrentGame(null);
-                }
-                playerInitialized = true;
-                updateUI();
-            }
+    private void resolvePlayerState() {
+        if (userId == null) return; // defensive — userId is resolved synchronously in onCreate
+        Player currentPlayer = gameService.getCurrentPlayer();
 
-            @Override
-            public void onDataNotAvailable(String error) {
-                playerInitialized = true;
-                errorMessage.setText("Ошибка загрузки игры: " + error);
-                errorMessage.setVisibility(View.VISIBLE);
+        if (currentPlayer == null) {
+            // First-time initialization. If a game in the list already has us as a player
+            // (created by us before app restart, or we've been added to someone's team
+            // earlier), restore identity from there. Otherwise create a fresh player.
+            Game existingGame = findMyGameInList(userId);
+            if (existingGame != null) {
+                Player playerInGame = existingGame.getPlayerById(userId);
+                gameService.setCurrentPlayer(playerInGame);
+                gameService.setCurrentGame(existingGame);
+                playerNameInput.setText(playerInGame.getName());
+            } else {
+                String name = UserUtils.getSavedName(getApplicationContext());
+                if (name == null || name.trim().isEmpty()) {
+                    name = UserUtils.generateDefaultName();
+                    UserUtils.saveName(getApplicationContext(), name);
+                }
+                Player newPlayer = new Player(name, userId);
+                gameService.setCurrentPlayer(newPlayer);
+                playerNameInput.setText(name);
             }
-        });
+        } else if (gameService.getCurrentGame() == null) {
+            // Already initialized, no team — pick up the team if a boss just approved us
+            Game existingGame = findMyGameInList(userId);
+            if (existingGame != null) {
+                gameService.setCurrentGame(existingGame);
+            }
+        }
+
+        updateUI();
     }
 
-    private void loadUnstartedGames() {
-        gameSyncService.getAllUnstartedGames(new GamesDataCallback() {
-            @Override
-            public void onGamesLoaded(List<Game> games) {
-                // Обновление списка игр в RecyclerView
-                gameService.setGames(games);
-                errorMessage.setVisibility(View.GONE);
-                teamList.setVisibility(View.VISIBLE);
-                gamesAttempted = true;
-                tryInitPlayer();
-                if (gameService.getCurrentPlayer() != null) {
-                    updateUI();
-                }
+    private Game findMyGameInList(String playerId) {
+        for (Game g : gameService.getGames()) {
+            if (!g.isStarted() && g.hasPlayer(playerId)) {
+                return g;
             }
-
-            @Override
-            public void onDataNotAvailable(String error) {
-                // Показ сообщения об ошибке
-                errorMessage.setText("Ошибка загрузки таблицы: " + error);
-                errorMessage.setVisibility(View.VISIBLE);
-                teamList.setVisibility(View.GONE);
-                gamesAttempted = true;
-                tryInitPlayer();
-            }
-        });
+        }
+        return null;
     }
 
     private void updateUI() {
         Game currentGame = gameService.getCurrentGame();
+        Player currentPlayer = gameService.getCurrentPlayer();
         if (currentGame != null) {
+            // Only the boss (team creator) gets disband / start-game controls.
+            // Guests can only leave their own row from the players list.
+            boolean iAmBoss = currentPlayer != null
+                    && currentGame.getBossId() != null
+                    && currentGame.getBossId().equals(currentPlayer.getId());
             if (currentGame.isStarted()) {
                 // Обновите UI для начала игры, возможно, переход на новую активность
             } else {
                 newTeamButton.setVisibility(View.GONE);
-                disbandTeamButton.setVisibility(View.VISIBLE);
-                if (currentGame.getPlayers().size() >= 2 && currentGame.getPlayers().size() <= 4) {
-                    startGameButton.setVisibility(View.VISIBLE);
+                if (iAmBoss) {
+                    disbandTeamButton.setVisibility(View.VISIBLE);
+                    int playerCount = currentGame.getPlayers().size();
+                    startGameButton.setVisibility(
+                            playerCount >= 2 && playerCount <= 4 ? View.VISIBLE : View.GONE);
                 } else {
+                    disbandTeamButton.setVisibility(View.GONE);
                     startGameButton.setVisibility(View.GONE);
                 }
             }
@@ -240,33 +245,18 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
-        gameSyncService.removeGameEventListener();
+        gameSyncService.unregisterGamesListener(gamesCallback);
+        gameSyncService.unregisterConnectionCallback(connectionCallback);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        loadUnstartedGames();
-
-        if (gameService.getCurrentGame() != null) {
-            gameSyncService.syncGame(new GameDataCallback() {
-                @Override
-                public void onGameLoaded(Game game) {
-                    if (game != null) {
-                        gameService.updateGame(game);
-                        updateUI();
-                    }
-                }
-
-                @Override
-                public void onDataNotAvailable(String error) {
-                    // handle error
-                    errorMessage.setText("Sync error: " + error);
-                    errorMessage.setVisibility(View.VISIBLE);
-                    teamList.setVisibility(View.GONE);
-                }
-            }, gameService.getCurrentGame().getId());
-        }
+        // Persistent listeners live in GameSyncService for the lifetime of the process.
+        // Subscribing here just hooks our callbacks into the in-memory cache and
+        // delivers the latest state synchronously — no fresh Firebase round trip.
+        gameSyncService.registerGamesListener(gamesCallback);
+        gameSyncService.registerConnectionCallback(connectionCallback);
     }
 
     private void precessMessages(Game currentGame) {
@@ -312,9 +302,15 @@ public class MainActivity extends AppCompatActivity {
 
         // Устанавливаем обработчики для кнопок диалогового окна
         builder.setPositiveButton("Одобрить", (dialog, which) -> {
-            // Если лидер нажимает "Одобрить", подключаем игрока к команде
+            // Resolve the freshest current-game reference at click-time.
+            // The `game` argument is captured at dialog-show time and may be stale —
+            // setGames() can have refreshed gameService.currentGame between the dialog
+            // being shown and the user tapping. Saving the stale `game` would push
+            // a version of the team WITHOUT the new player back to Firebase.
+            Game current = gameService.getCurrentGame();
+            if (current == null) return;
             if (gameService.addPlayerToCurrentGame(new Player(playerName, playerId))) {
-                gameSyncService.saveGame(game);
+                gameSyncService.saveGame(current);
             }
         });
 
