@@ -1,33 +1,42 @@
-<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
-                                   xmlns:app="http://schemas.android.com/apk/res-auto"
-                                   android:layout_width="match_parent"
-                                   android:layout_height="wrap_content"
-                                   android:layout_margin="5dp"
-                                   app:cardElevation="2dp"
-                                   app:cardCornerRadius="8dp">
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="8dp"
+    app:cardBackgroundColor="@color/domino_surface_variant"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="0dp"
+    app:strokeColor="@color/domino_outline"
+    app:strokeWidth="1dp">
 
     <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:padding="5dp" android:background="#C67ED3">
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="14dp">
 
         <TextView
-                android:id="@+id/player_name"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:textSize="18sp"
-                android:textStyle="bold"
-                android:textColor="#000000"
-                android:text="Player Name"/>
+            android:id="@+id/player_name"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="@color/domino_on_surface"
+            android:textSize="16sp"/>
 
-        <Button
-                android:id="@+id/kick_button"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Выйти"
-                android:textColor="#FFFFFF" android:textSize="12sp" android:minWidth="50dip"/>
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/kick_button"
+            style="@style/Widget.Domino.Button.Outlined"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:insetTop="4dp"
+            android:insetBottom="4dp"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"/>
     </LinearLayout>
-
-</androidx.cardview.widget.CardView>
+</com.google.android.material.card.MaterialCardView>

@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Tablet layout (sw600dp+). Content (team list / current team) on the left ~60% of
+  the screen, controls panel pinned to the right column. Both halves use the full
+  vertical space below the toolbar. Compare with the phone layout where the same
+  IDs are stacked vertically.
+-->
 <androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -20,34 +26,46 @@
             app:titleTextColor="@color/domino_on_primary"
             app:layout_constraintTop_toTopOf="parent"/>
 
-        <!-- LIST OF OPEN TEAMS (shown when not in a team).
-             layout_margin on all sides — the bottom margin gives breathing room between
-             this card and the bottom_panel below it. -->
+        <!-- Vertical guideline at 60% — splits the screen into content (left) and controls (right).
+             Using a Guideline (instead of cross-referencing the cards) means the right column
+             stays in place when the left card swaps visibility between team_list_card and
+             current_team_card. Otherwise hiding team_list_card would collapse it to width 0
+             at position 0, and bottom_panel.start_toEndOf=team_list_card would let the controls
+             panel stretch over the whole screen. -->
+        <androidx.constraintlayout.widget.Guideline
+            android:id="@+id/vertical_guideline_60"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            app:layout_constraintGuide_percent="0.6"/>
+
+        <!-- LEFT: list of open teams (shown when not in a team) -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/team_list_card"
             style="@style/Widget.Domino.Card"
             android:layout_width="0dp"
             android:layout_height="0dp"
-            android:layout_margin="12dp"
+            android:layout_margin="16dp"
+            app:cardCornerRadius="20dp"
             app:layout_constraintTop_toBottomOf="@id/toolbar"
-            app:layout_constraintBottom_toTopOf="@id/bottom_panel"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
+            app:layout_constraintEnd_toStartOf="@id/vertical_guideline_60">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:orientation="vertical"
-                android:padding="12dp">
+                android:padding="16dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Открытые команды"
                     android:textColor="@color/domino_primary_dark"
-                    android:textSize="18sp"
+                    android:textSize="22sp"
                     android:textStyle="bold"
-                    android:paddingBottom="8dp"/>
+                    android:paddingBottom="12dp"/>
 
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/team_list"
@@ -59,33 +77,34 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- CURRENT TEAM (shown when in a team) -->
+        <!-- LEFT: current team (shown when in a team — overlays team_list_card area) -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/current_team_card"
             style="@style/Widget.Domino.Card"
             android:layout_width="0dp"
             android:layout_height="0dp"
-            android:layout_margin="12dp"
+            android:layout_margin="16dp"
             android:visibility="gone"
+            app:cardCornerRadius="20dp"
             app:layout_constraintTop_toBottomOf="@id/toolbar"
-            app:layout_constraintBottom_toTopOf="@id/bottom_panel"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
+            app:layout_constraintEnd_toStartOf="@id/vertical_guideline_60">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:orientation="vertical"
-                android:padding="12dp">
+                android:padding="16dp">
 
                 <TextView
                     android:id="@+id/current_team_name"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:textColor="@color/domino_primary_dark"
-                    android:textSize="20sp"
+                    android:textSize="24sp"
                     android:textStyle="bold"
-                    android:paddingBottom="8dp"/>
+                    android:paddingBottom="12dp"/>
 
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/current_game"
@@ -97,23 +116,27 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- BOTTOM PANEL: name input + actions -->
+        <!-- RIGHT: controls panel pinned to the right column for the full height.
+             Anchored to the guideline rather than to a card so visibility changes on the
+             left side don't shift this panel. -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/bottom_panel"
             style="@style/Widget.Domino.Card"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_margin="12dp"
+            android:layout_height="0dp"
+            android:layout_margin="16dp"
+            app:cardCornerRadius="20dp"
             app:cardElevation="4dp"
+            app:layout_constraintTop_toBottomOf="@id/toolbar"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintStart_toEndOf="@id/vertical_guideline_60"
             app:layout_constraintEnd_toEndOf="parent">
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="match_parent"
                 android:orientation="vertical"
-                android:padding="12dp">
+                android:padding="20dp">
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:id="@+id/player_name_layout"
@@ -138,41 +161,37 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:textColor="@color/domino_error"
-                    android:textSize="13sp"
-                    android:paddingTop="4dp"
+                    android:textSize="14sp"
+                    android:paddingTop="6dp"
                     android:visibility="gone"/>
 
-                <LinearLayout
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"/>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/new_team_button"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:paddingTop="12dp">
+                    android:text="Новая команда"/>
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/new_team_button"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="Новая команда"/>
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/start_game_button"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Начать игру"
+                    android:visibility="gone"/>
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/disband_team_button"
-                        style="@style/Widget.Domino.Button.Destructive"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="Распустить"
-                        android:visibility="gone"/>
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/start_game_button"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginStart="8dp"
-                        android:text="Начать игру"
-                        android:visibility="gone"/>
-                </LinearLayout>
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/disband_team_button"
+                    style="@style/Widget.Domino.Button.Destructive"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Распустить команду"
+                    android:visibility="gone"/>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
     </androidx.constraintlayout.widget.ConstraintLayout>

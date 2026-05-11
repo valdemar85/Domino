@@ -10,6 +10,7 @@ import com.family.service.GameService;
 import com.family.dto.Player;
 import com.family.app.R;
 import com.family.service.GameSyncService;
+import com.google.android.material.snackbar.Snackbar;
 
 import static com.family.dto.Message.TEAM_PARTICIPATION_REQUEST;
 
@@ -33,7 +34,8 @@ public class TeamTableAdapter extends RecyclerView.Adapter<TeamViewHolder> {
     public void onBindViewHolder(TeamViewHolder holder, int position) {
         Game game = gameService.getGames().get(position);
         holder.gameName.setText(game.getName());
-        holder.playerCount.setText(String.valueOf(game.getPlayers().size()));
+        int playerCount = game.getPlayers().size();
+        holder.playerCount.setText(playerCount + " / 4 игроков");
 
         Player currentPlayer = gameService.getCurrentPlayer();
         if (currentPlayer == null) {
@@ -49,14 +51,14 @@ public class TeamTableAdapter extends RecyclerView.Adapter<TeamViewHolder> {
                 game.addMessage(message);
                 gameSyncService.saveGame(game);
                 holder.connectButton.setEnabled(false); // disable the button after the player joins the game
+                Snackbar.make(v, "Запрос отправлен. Ждите ответа босса.", Snackbar.LENGTH_SHORT).show();
             }
         });
 
-        if (game.getPlayers().size() >= 4 || game.hasPlayer(currentPlayerId) || (gameService.getCurrentGame() != null)) {
-            holder.connectButton.setEnabled(false);
-        } else {
-            holder.connectButton.setEnabled(true);
-        }
+        boolean canConnect = playerCount < 4
+                && !game.hasPlayer(currentPlayerId)
+                && gameService.getCurrentGame() == null;
+        holder.connectButton.setEnabled(canConnect);
     }
 
     @Override

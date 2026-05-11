@@ -1,8 +1,11 @@
 package com.family.activity;
 
+import android.content.Context;
+import android.content.res.ColorStateList;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 import com.family.app.R;
 import com.family.dto.Game;
@@ -49,17 +52,22 @@ public class CurrentGameTableAdapter extends RecyclerView.Adapter<CurrentGameVie
         boolean iAmBoss = bossId != null && bossId.equals(currentPlayerId);
 
         // Visibility rules:
-        //  - My row, I am NOT the boss → "Выйти" (I leave the team)
-        //  - Someone else's row, I AM the boss → "Выгнать" (boss kicks a guest)
-        //    (boss can never appear here as "someone else" since there is one boss
-        //     and isMe is true for the boss's own row)
+        //  - My row, I am NOT the boss → "Выйти" (I leave the team) — neutral outline
+        //  - Someone else's row, I AM the boss → "Выгнать" (boss kicks a guest) — red outline
         //  - Otherwise hide (boss's own row, or guest viewing other guests)
+        Context ctx = holder.itemView.getContext();
         if (isMe && !iAmBoss) {
             holder.kickButton.setVisibility(View.VISIBLE);
             holder.kickButton.setText("Выйти");
+            int neutralColor = ContextCompat.getColor(ctx, R.color.domino_primary);
+            holder.kickButton.setStrokeColor(ColorStateList.valueOf(neutralColor));
+            holder.kickButton.setTextColor(neutralColor);
         } else if (!isMe && iAmBoss) {
             holder.kickButton.setVisibility(View.VISIBLE);
             holder.kickButton.setText("Выгнать");
+            int destructiveColor = ContextCompat.getColor(ctx, R.color.domino_error);
+            holder.kickButton.setStrokeColor(ColorStateList.valueOf(destructiveColor));
+            holder.kickButton.setTextColor(destructiveColor);
         } else {
             holder.kickButton.setVisibility(View.GONE);
             holder.kickButton.setOnClickListener(null);

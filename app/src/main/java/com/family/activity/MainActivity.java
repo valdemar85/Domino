@@ -12,7 +12,6 @@ import android.widget.EditText;
 import android.widget.TextView;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.family.app.*;
@@ -23,6 +22,8 @@ import com.family.dto.Player;
 import com.family.service.GameService;
 import com.family.service.GameSyncService;
 import com.family.utils.UserUtils;
+import com.google.android.material.card.MaterialCardView;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import java.util.Iterator;
 import java.util.List;
@@ -41,6 +42,8 @@ public class MainActivity extends AppCompatActivity {
     private CurrentGameTableAdapter currentGameTableAdapter;
     private RecyclerView teamList;
     private RecyclerView currentGameTable;
+    private MaterialCardView teamListCard;
+    private MaterialCardView currentTeamCard;
     private Button newTeamButton, disbandTeamButton, startGameButton;
     private EditText playerNameInput;
     private TextView errorMessage, currentTeamName;
@@ -90,15 +93,15 @@ public class MainActivity extends AppCompatActivity {
         playerNameInput = findViewById(R.id.player_name_input);
         errorMessage = findViewById(R.id.error_message);
         currentTeamName = findViewById(R.id.current_team_name);
+        teamListCard = findViewById(R.id.team_list_card);
+        currentTeamCard = findViewById(R.id.current_team_card);
 
         teamList = findViewById(R.id.team_list);
-        teamList.addItemDecoration(new DividerItemDecoration(this, LinearLayoutManager.VERTICAL));
         teamList.setLayoutManager(new LinearLayoutManager(this));
         teamTableAdapter = new TeamTableAdapter(gameService, gameSyncService);
         teamList.setAdapter(teamTableAdapter);
 
         currentGameTable = findViewById(R.id.current_game);
-        currentGameTable.addItemDecoration(new DividerItemDecoration(this, LinearLayoutManager.VERTICAL));
         currentGameTable.setLayoutManager(new LinearLayoutManager(this));
         currentGameTableAdapter = new CurrentGameTableAdapter(gameService, gameSyncService);
         currentGameTable.setAdapter(currentGameTableAdapter);
@@ -207,6 +210,12 @@ public class MainActivity extends AppCompatActivity {
         Game currentGame = gameService.getCurrentGame();
         Player currentPlayer = gameService.getCurrentPlayer();
         if (currentGame != null) {
+            // In a team — show the current-team card, hide the open-teams list.
+            // The list is useless to a player who's already committed: every "Вступить"
+            // button there is disabled anyway, so the section just adds clutter.
+            teamListCard.setVisibility(View.GONE);
+            currentTeamCard.setVisibility(View.VISIBLE);
+
             // Only the boss (team creator) gets disband / start-game controls.
             // Guests can only leave their own row from the players list.
             boolean iAmBoss = currentPlayer != null
@@ -228,15 +237,15 @@ public class MainActivity extends AppCompatActivity {
             }
             playerNameInput.setEnabled(false);
             currentTeamName.setText(currentGame.getName());
-            currentTeamName.setVisibility(View.VISIBLE);
             precessMessages(currentGame);
         } else {
+            teamListCard.setVisibility(View.VISIBLE);
+            currentTeamCard.setVisibility(View.GONE);
+
             newTeamButton.setVisibility(View.VISIBLE);
             disbandTeamButton.setVisibility(View.GONE);
             startGameButton.setVisibility(View.GONE);
             playerNameInput.setEnabled(true);
-            currentTeamName.setText("");
-            currentTeamName.setVisibility(View.GONE);
         }
         teamTableAdapter.notifyDataSetChanged();
         currentGameTableAdapter.notifyDataSetChanged();
@@ -278,73 +287,54 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void processAlertMessage(String textMessageToShow) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Уведомление");
-        builder.setMessage(textMessageToShow);
-
-        // Устанавливаем обработчик для кнопки "OK"
-        builder.setPositiveButton("OK", (dialog, which) -> {
-            // Если пользователь нажимает "OK", закрываем диалоговое окно
-            dialog.dismiss();
-        });
-
-        // Показываем диалоговое окно
-        AlertDialog dialog = builder.create();
-        dialog.show();
+        new MaterialAlertDialogBuilder(this)
+                .setTitle("Уведомление")
+                .setMessage(textMessageToShow)
+                .setPositiveButton("OK", (dialog, which) -> dialog.dismiss())
+                .show();
     }
 
-    // Это может быть в вашем Activity или Fragment, где отображается экран лидера команды
+    private void sendAlertToPlayer(String targetPlayerId, String text) {
+        Player currentPlayer = gameService.getCurrentPlayer();
+        Game currentGame = gameService.getCurrentGame();
+        if (currentPlayer == null || currentGame == null) return;
+        Message message = new Message(currentPlayer.getId(), currentPlayer.getName(), targetPlayerId, ALERT);
+        message.setMessageText(text);
+        currentGame.addMessage(message);
+        gameSyncService.saveGame(currentGame);
+    }
+
     private void alertBossTeamParticipationRequest(String playerId, String playerName, Game game) {
-        // Создаем диалоговое окно
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Запрос на присоединение к команде");
-        builder.setMessage(playerName + " хочет в вашу команду");
-
-        // Устанавливаем обработчики для кнопок диалогового окна
-        builder.setPositiveButton("Одобрить", (dialog, which) -> {
-            // Resolve the freshest current-game reference at click-time.
-            // The `game` argument is captured at dialog-show time and may be stale —
-            // setGames() can have refreshed gameService.currentGame between the dialog
-            // being shown and the user tapping. Saving the stale `game` would push
-            // a version of the team WITHOUT the new player back to Firebase.
-            Game current = gameService.getCurrentGame();
-            if (current == null) return;
-            if (gameService.addPlayerToCurrentGame(new Player(playerName, playerId))) {
-                gameSyncService.saveGame(current);
-            }
-        });
-
-        builder.setNegativeButton("Отказать", (dialog, which) -> {
-            // Если лидер нажимает "Отказать", ничего не делаем
-            // отправить игроку уведомление об отказе здесь
-//            Player currentPlayer = gameService.getCurrentPlayer();
-//            Message message = new Message(currentPlayer.getId(), currentPlayer.getName(), playerId, ALERT);
-//            message.setMessageText("Вам отказано");
-//            gameService.getCurrentGame().addMessage(message);
-//            gameSyncService.saveGame(gameService.getCurrentGame());
-        });
-
-        // Устанавливаем таймаут для автоматического отказа
-        final AlertDialog dialog = builder.create();
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this)
+                .setTitle("Запрос на участие")
+                .setMessage(playerName + " хочет вступить в вашу команду")
+                .setPositiveButton("Одобрить", (d, which) -> {
+                    // Resolve the freshest current-game reference at click time.
+                    // The `game` argument was captured when the dialog was shown and may
+                    // be stale — setGames() can have refreshed gameService.currentGame
+                    // between dialog show and tap. Saving the stale `game` would push a
+                    // version of the team WITHOUT the new player back to Firebase.
+                    Game current = gameService.getCurrentGame();
+                    if (current == null) return;
+                    if (gameService.addPlayerToCurrentGame(new Player(playerName, playerId))) {
+                        gameSyncService.saveGame(current);
+                    }
+                })
+                .setNegativeButton("Отказать", (d, which) -> {
+                    sendAlertToPlayer(playerId, "Босс отклонил ваш запрос на участие");
+                })
+                .create();
         dialog.show();
 
-        final Handler handler  = new Handler(Looper.getMainLooper());
+        // Auto-deny after 15s if the boss doesn't react — let the guest know they timed out.
+        final Handler handler = new Handler(Looper.getMainLooper());
         final Runnable runnable = () -> {
             if (dialog.isShowing()) {
                 dialog.dismiss();
-                // send a notification of denial to the player here
-                Player currentPlayer = gameService.getCurrentPlayer();
-                Game currentGame = gameService.getCurrentGame();
-                if (currentPlayer == null || currentGame == null) return;
-                Message message = new Message(currentPlayer.getId(), currentPlayer.getName(), playerId, ALERT);
-                message.setMessageText("Истекло время на одобрение");
-                currentGame.addMessage(message);
-                gameSyncService.saveGame(currentGame);
+                sendAlertToPlayer(playerId, "Истекло время на одобрение");
             }
         };
-
-        dialog.setOnDismissListener(dialogInterface -> handler.removeCallbacks(runnable));
-
+        dialog.setOnDismissListener(d -> handler.removeCallbacks(runnable));
         handler.postDelayed(runnable, 15000);
     }
 

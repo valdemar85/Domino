@@ -1,10 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
+    <!-- Sea / ocean theme: deep ocean primary, light aqua surfaces, warm sand accent.
+         Matches the "Морские" branding and the sea-creature dominoes art. -->
+
+    <!-- Brand / primary actions -->
+    <color name="domino_primary">#01579B</color>
+    <color name="domino_primary_dark">#002F6C</color>
+    <color name="domino_primary_light">#4FC3F7</color>
+    <color name="domino_on_primary">#FFFFFF</color>
+
+    <!-- Warm sand accent for secondary highlights -->
+    <color name="domino_secondary">#FFB74D</color>
+    <color name="domino_secondary_dark">#F57F17</color>
+
+    <!-- Background: noticeable aqua tone so white cards stand out against it -->
+    <color name="domino_background">#C5E0EA</color>
+
+    <!-- Surfaces -->
+    <color name="domino_surface">#FFFFFF</color>
+    <color name="domino_surface_variant">#DEEFF7</color>
+
+    <!-- Dialog background sits between surface and primary_light — gives modal dialogs
+         a clearly different tone from the white cards behind them, so the boss can tell
+         "this is a popup" at a glance. -->
+    <color name="domino_dialog_surface">#E1F5FE</color>
+
+    <!-- Text on surfaces -->
+    <color name="domino_on_surface">#0D2A3D</color>
+    <color name="domino_on_surface_muted">#5A7889</color>
+    <color name="domino_outline">#9FBED2</color>
+
+    <!-- Semantic accents -->
+    <color name="domino_success">#00796B</color>
+    <color name="domino_error">#D32F2F</color>
+    <color name="domino_white">#FFFFFF</color>
 </resources>
