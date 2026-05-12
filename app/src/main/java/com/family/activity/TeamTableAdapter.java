@@ -32,7 +32,7 @@ public class TeamTableAdapter extends RecyclerView.Adapter<TeamViewHolder> {
 
     @Override
     public void onBindViewHolder(TeamViewHolder holder, int position) {
-        Game game = gameService.getGames().get(position);
+        Game game = gameService.getOpenGames().get(position);
         holder.gameName.setText(game.getName());
         int playerCount = game.getPlayers().size();
         holder.playerCount.setText(playerCount + " / 4 игроков");
@@ -63,7 +63,7 @@ public class TeamTableAdapter extends RecyclerView.Adapter<TeamViewHolder> {
 
     @Override
     public int getItemCount() {
-        return gameService.getGames().size();
+        return gameService.getOpenGames().size();
     }
 
 }

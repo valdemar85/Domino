@@ -21,5 +21,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+                android:name="com.family.activity.GameActivity"
+                android:exported="false"
+                android:parentActivityName="com.family.activity.MainActivity"
+                android:configChanges="orientation|screenSize|keyboardHidden"/>
+
     </application>
 </manifest>

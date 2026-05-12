@@ -11,6 +11,8 @@ public class Game {
     private boolean isStarted;
     private List<Message> messages = new ArrayList<>();
     private long createdAt;
+    /** Runtime game state once the round is in progress. Null while in lobby. */
+    private GameState state;
 
     // No-argument constructor
     public Game() {}
@@ -122,6 +124,14 @@ public class Game {
             this.messages = new ArrayList<>();
         }
         this.messages.add(message);
+    }
+
+    public GameState getState() {
+        return state;
+    }
+
+    public void setState(GameState state) {
+        this.state = state;
     }
 
 }

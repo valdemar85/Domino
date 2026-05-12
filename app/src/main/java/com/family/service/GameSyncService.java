@@ -100,28 +100,30 @@ public class GameSyncService {
         gamesRef.addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot dataSnapshot) {
-                List<Game> unstartedGames = new ArrayList<>();
+                List<Game> activeGames = new ArrayList<>();
                 long now = currentServerTimeMillis();
                 for (DataSnapshot gameSnapshot : dataSnapshot.getChildren()) {
                     Game game = gameSnapshot.getValue(Game.class);
-                    if (game == null || game.isStarted()) {
+                    if (game == null) {
                         continue;
                     }
                     long createdAt = game.getCreatedAt();
                     // Cleanup criteria:
-                    //  - createdAt == 0: legacy record from an old build that didn't set
-                    //    timestamps; safe to remove because the current build always sets
-                    //    createdAt synchronously in GameService.createGame() before saveGame.
+                    //  - createdAt == 0: legacy record from an old build.
                     //  - now - createdAt > TTL: orphan game whose creator never disbanded.
                     if (createdAt == 0 || (now - createdAt) > STALE_GAME_TTL_MILLIS) {
                         removeGame(game.getId());
                         continue;
                     }
-                    unstartedGames.add(game);
+                    // NOTE: we keep started games in the cache too — the lobby filters
+                    // them out for display via gameService.getOpenGames(), but each
+                    // player still needs to see "my own team just started" via this
+                    // listener so MainActivity can launch GameActivity.
+                    activeGames.add(game);
                 }
                 synchronized (cachedGames) {
                     cachedGames.clear();
-                    cachedGames.addAll(unstartedGames);
+                    cachedGames.addAll(activeGames);
                 }
                 hasGamesData = true;
                 for (GamesDataCallback cb : gamesCallbacks) {

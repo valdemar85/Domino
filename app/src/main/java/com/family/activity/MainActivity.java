@@ -1,6 +1,7 @@
 package com.family.activity;
 
 import android.content.Context;
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -17,8 +18,10 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.family.app.*;
 import com.family.callbacks.GamesDataCallback;
 import com.family.dto.Game;
+import com.family.dto.GameState;
 import com.family.dto.Message;
 import com.family.dto.Player;
+import com.family.service.DominoLogic;
 import com.family.service.GameService;
 import com.family.service.GameSyncService;
 import com.family.utils.UserUtils;
@@ -37,6 +40,8 @@ public class MainActivity extends AppCompatActivity {
     private final GameSyncService gameSyncService = GameSyncService.getInstance();
 
     private String userId;
+    /** Guard so we don't open GameActivity repeatedly on every listener tick. */
+    private boolean gameActivityLaunched = false;
 
     private TeamTableAdapter teamTableAdapter;
     private CurrentGameTableAdapter currentGameTableAdapter;
@@ -129,9 +134,13 @@ public class MainActivity extends AppCompatActivity {
             Game current = gameService.getCurrentGame();
             if (current == null) return;
             if (!gameService.startGame()) return;
-            // Persist the started=true flag so other team members see the game start too.
+            // Deal a fresh round. Boss is the source of truth for the initial shuffle —
+            // other players will receive it via the games listener and just render it.
+            java.util.List<String> playerIds = new java.util.ArrayList<>();
+            for (Player p : current.getPlayers()) playerIds.add(p.getId());
+            GameState state = DominoLogic.newRound(playerIds, current.getState());
+            current.setState(state);
             gameSyncService.saveGame(current);
-            // переходите на новую активность здесь
             updateUI();
         });
 
@@ -198,8 +207,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private Game findMyGameInList(String playerId) {
+        // Find ANY game (started or open) I'm part of — started games still belong
+        // to their players; MainActivity needs to know to launch the game screen.
         for (Game g : gameService.getGames()) {
-            if (!g.isStarted() && g.hasPlayer(playerId)) {
+            if (g.hasPlayer(playerId)) {
                 return g;
             }
         }
@@ -209,6 +220,15 @@ public class MainActivity extends AppCompatActivity {
     private void updateUI() {
         Game currentGame = gameService.getCurrentGame();
         Player currentPlayer = gameService.getCurrentPlayer();
+        // If our team's round has started, hand off to GameActivity.
+        // The guard prevents repeated launches every time the listener ticks.
+        if (currentGame != null && currentGame.isStarted() && !gameActivityLaunched) {
+            gameActivityLaunched = true;
+            Intent i = new Intent(this, GameActivity.class);
+            i.putExtra(GameActivity.EXTRA_GAME_ID, currentGame.getId());
+            startActivity(i);
+            return;
+        }
         if (currentGame != null) {
             // In a team — show the current-team card, hide the open-teams list.
             // The list is useless to a player who's already committed: every "Вступить"
@@ -261,6 +281,9 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        // Reset on return from GameActivity. If the round is still in progress, the
+        // first listener tick will re-launch GameActivity; if it's over, we stay in lobby.
+        gameActivityLaunched = false;
         // Persistent listeners live in GameSyncService for the lifetime of the process.
         // Subscribing here just hooks our callbacks into the in-memory cache and
         // delivers the latest state synchronously — no fresh Firebase round trip.

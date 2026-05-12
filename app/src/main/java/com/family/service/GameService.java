@@ -54,6 +54,15 @@ public class GameService {
         return games;
     }
 
+    /** Games in the lobby phase (no round started yet). Used by the team list. */
+    public List<Game> getOpenGames() {
+        List<Game> open = new ArrayList<>();
+        for (Game g : games) {
+            if (!g.isStarted()) open.add(g);
+        }
+        return open;
+    }
+
     public void setGames(List<Game> games) {
         this.games = games;
         if (currentGame != null) {

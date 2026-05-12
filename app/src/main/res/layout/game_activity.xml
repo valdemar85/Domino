@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Game screen.
+
+  Phone portrait fit: vertical stack with the board occupying the biggest middle
+  block. No toolbar — title bar burns ~56dp that we'd rather give to the board.
+  Status, scores, players are squeezed into a thin header card; controls into a
+  one-line strip; hand at the bottom with tiles rendered vertically (one column
+  per tile) to keep the horizontal hand row short.
+
+  Tablet landscape: this same layout still works fine (board card just grows
+  wider). If we ever want a side-by-side panel layout, add res/layout-sw600dp.
+-->
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?android:attr/colorBackground">
+
+    <!-- Compact header: status + scores. -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/status_card"
+        style="@style/Widget.Domino.Card"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginTop="8dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="8dp">
+            <TextView
+                android:id="@+id/status_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/domino_primary_dark"
+                android:textSize="15sp"
+                android:textStyle="bold"/>
+            <TextView
+                android:id="@+id/scores_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textColor="@color/domino_on_surface_muted"
+                android:textSize="12sp"/>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <!-- Other players one-liner. -->
+    <HorizontalScrollView
+        android:id="@+id/players_info_scroll"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginTop="4dp"
+        android:scrollbars="none"
+        app:layout_constraintTop_toBottomOf="@id/status_card"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+        <LinearLayout
+            android:id="@+id/players_info"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"/>
+    </HorizontalScrollView>
+
+    <!-- BOARD — biggest space. Pinch-to-zoom, double-tap to reset zoom,
+         horizontal scroll for long chains. -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/board_card"
+        style="@style/Widget.Domino.Card"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_margin="8dp"
+        app:cardBackgroundColor="@color/domino_surface_variant"
+        app:layout_constraintTop_toBottomOf="@id/players_info_scroll"
+        app:layout_constraintBottom_toTopOf="@id/controls"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+        <HorizontalScrollView
+            android:id="@+id/board_scroll"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:scrollbars="none">
+            <LinearLayout
+                android:id="@+id/board"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="12dp"/>
+        </HorizontalScrollView>
+    </com.google.android.material.card.MaterialCardView>
+
+    <LinearLayout
+        android:id="@+id/controls"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="6dp"
+        android:gravity="center_vertical"
+        app:layout_constraintBottom_toTopOf="@id/hand_card"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+        <TextView
+            android:id="@+id/bazaar_info"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="@color/domino_on_surface_muted"
+            android:textSize="12sp"/>
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/draw_button"
+            style="@style/Widget.Domino.Button.Outlined"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="4dp"
+            android:insetTop="2dp"
+            android:insetBottom="2dp"
+            android:text="Взять"/>
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/next_round_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="4dp"
+            android:insetTop="2dp"
+            android:insetBottom="2dp"
+            android:text="Новый раунд"
+            android:visibility="gone"/>
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/leave_button"
+            style="@style/Widget.Domino.Button.Destructive"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:insetTop="2dp"
+            android:insetBottom="2dp"
+            android:text="Закончить"/>
+    </LinearLayout>
+
+    <!-- My hand at the bottom: vertically oriented tiles in a horizontal scroll row. -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/hand_card"
+        style="@style/Widget.Domino.Card"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="8dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none">
+            <LinearLayout
+                android:id="@+id/my_hand"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:padding="8dp"/>
+        </HorizontalScrollView>
+    </com.google.android.material.card.MaterialCardView>
+</androidx.constraintlayout.widget.ConstraintLayout>
