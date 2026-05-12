@@ -23,6 +23,7 @@ import com.family.dto.GameState;
 import com.family.dto.Player;
 import com.family.dto.Tile;
 import com.family.service.DominoLogic;
+import com.family.service.SoundManager;
 import com.family.utils.UserUtils;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
@@ -83,6 +84,16 @@ public class GameActivity extends AppCompatActivity {
     /** Current board zoom factor, preserved across config changes. */
     private float boardScale = 1f;
 
+    private SoundManager soundManager;
+
+    // Snapshots from the previous render() tick. We use these to detect "what just
+    // happened" — a new tile played left/right, or a round just finished — and trigger
+    // the corresponding sound + entry animation. Without this diff, we'd play the
+    // sound on every listener tick (including pure refreshes from other clients).
+    private int previousBoardSize = 0;
+    private int previousLeftEnd = -1;
+    private boolean previousRoundFinished = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -106,6 +117,16 @@ public class GameActivity extends AppCompatActivity {
         leaveButton.setOnClickListener(v -> handleLeave());
 
         setupBoardZoom();
+        soundManager = new SoundManager(this);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (soundManager != null) {
+            soundManager.release();
+            soundManager = null;
+        }
     }
 
     /**
@@ -239,12 +260,21 @@ public class GameActivity extends AppCompatActivity {
         if (!matchesLeft && !matchesRight) return;
 
         if (matchesLeft && matchesRight && s.getLeftEnd() != s.getRightEnd()) {
+            // Phrase the choice in terms of the matching value, not "left/right".
+            // Two reasons:
+            //   1. Android's positive button usually renders on the right of the dialog,
+            //      so a button labelled "Слева" appears on the right side of the screen —
+            //      confusing. A label like "К 5" is unambiguous regardless of position.
+            //   2. When the future snake layout wraps the chain around corners, "left"
+            //      and "right" no longer correspond to any visible direction — the
+            //      chain's ends can sit anywhere on screen. Naming the value future-proofs
+            //      this UI.
             new MaterialAlertDialogBuilder(this)
-                    .setTitle("Выберите сторону")
-                    .setMessage("Костяшка подходит к обеим сторонам.")
-                    .setPositiveButton("Слева (" + s.getLeftEnd() + ")",
+                    .setTitle("Куда приложить?")
+                    .setMessage("Костяшка подходит к обоим концам цепочки.")
+                    .setPositiveButton("К " + s.getLeftEnd(),
                             (d, w) -> applyTilePlay(tile, true))
-                    .setNegativeButton("Справа (" + s.getRightEnd() + ")",
+                    .setNegativeButton("К " + s.getRightEnd(),
                             (d, w) -> applyTilePlay(tile, false))
                     .show();
             return;
@@ -389,10 +419,31 @@ public class GameActivity extends AppCompatActivity {
         if (game == null || game.getState() == null) return;
         GameState s = game.getState();
 
+        // Detect transitions since the previous tick so we play sounds/animations
+        // only for actual events, not on every listener fire-through.
+        int newBoardSize = s.getBoard() == null ? 0 : s.getBoard().size();
+        boolean tileAdded = newBoardSize > previousBoardSize;
+        // If the left end value changed, the new tile went on the LEFT side.
+        // Otherwise it went on the right (or this is the first ever tile).
+        boolean addedOnLeft = tileAdded && s.getLeftEnd() != previousLeftEnd && previousBoardSize > 0;
+        boolean addedOnRight = tileAdded && !addedOnLeft;
+        boolean roundJustEnded = s.isRoundFinished() && !previousRoundFinished;
+
+        if (tileAdded && soundManager != null) {
+            soundManager.playTile();
+        }
+        if (roundJustEnded && soundManager != null) {
+            soundManager.playRoundWin();
+        }
+
+        previousBoardSize = newBoardSize;
+        previousLeftEnd = s.getLeftEnd();
+        previousRoundFinished = s.isRoundFinished();
+
         renderStatus(s);
         renderScores(s);
         renderPlayersInfo(s);
-        renderBoard(s);
+        renderBoard(s, addedOnLeft, addedOnRight);
         renderMyHand(s);
         renderControls(s);
 
@@ -464,18 +515,45 @@ public class GameActivity extends AppCompatActivity {
         }
     }
 
-    private void renderBoard(GameState s) {
+    private void renderBoard(GameState s, boolean animateLeft, boolean animateRight) {
         board.removeAllViews();
         if (s.getBoard() == null) return;
-        for (Tile t : s.getBoard()) {
-            board.addView(createTileView(t, false, false));
+        int size = s.getBoard().size();
+        for (int i = 0; i < size; i++) {
+            View tileView = createTileView(s.getBoard().get(i), false, false);
+            boolean shouldAnimate = (i == 0 && animateLeft)
+                    || (i == size - 1 && animateRight);
+            if (shouldAnimate) {
+                animateTileEntry(tileView);
+            }
+            board.addView(tileView);
         }
         board.post(() -> {
             View parent = (View) board.getParent();
             if (parent instanceof android.widget.HorizontalScrollView) {
-                ((android.widget.HorizontalScrollView) parent).fullScroll(View.FOCUS_RIGHT);
+                // Scroll to whichever end the new tile landed on so the player can see it.
+                ((android.widget.HorizontalScrollView) parent)
+                        .fullScroll(animateLeft ? View.FOCUS_LEFT : View.FOCUS_RIGHT);
             }
         });
+    }
+
+    /**
+     * Tile entry animation: start at 30% size + invisible, snap to 100% with a slight
+     * overshoot. Quick (200ms) so it doesn't slow down the game pace, but enough to
+     * draw the eye to where the new tile landed.
+     */
+    private void animateTileEntry(View tileView) {
+        tileView.setAlpha(0f);
+        tileView.setScaleX(0.3f);
+        tileView.setScaleY(0.3f);
+        tileView.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(220)
+                .setInterpolator(new android.view.animation.OvershootInterpolator(1.6f))
+                .start();
     }
 
     private void renderMyHand(GameState s) {
@@ -545,7 +623,10 @@ public class GameActivity extends AppCompatActivity {
                 : inHand
                     ? ContextCompat.getColor(this, R.color.domino_on_surface_muted)
                     : ContextCompat.getColor(this, R.color.domino_outline);
-        bg.setStroke(dp(playable ? 2 : 1), strokeColor);
+        // Playable tiles get a noticeably thicker border so they pop out of the row
+        // at a glance — 3dp vs 1dp for the rest. 4dp felt too "fat" against the small
+        // face artwork; 3dp is the sweet spot.
+        bg.setStroke(dp(playable ? 3 : 1), strokeColor);
         bg.setCornerRadius(dp(4));
         container.setBackground(bg);
 

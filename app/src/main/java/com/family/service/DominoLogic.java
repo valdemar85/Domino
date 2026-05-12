@@ -27,6 +27,30 @@ import java.util.Map;
 public final class DominoLogic {
     private DominoLogic() {}
 
+    /**
+     * House-rule rank order for opening doubles: 1-1 is the weakest (must be played
+     * first if anyone holds it), then 2-2, 3-3, …, 6-6, and 0-0 is considered the
+     * strongest of all doubles. So the round-opening tile is found by walking this
+     * sequence in order and picking the first double present in any hand.
+     */
+    private static final int[] DOUBLE_RANK_ORDER = {1, 2, 3, 4, 5, 6, 0};
+
+    /**
+     * The tile (a double) that MUST be the first move of the current round, if any
+     * player holds one. Returns null only when no hand contains a double at all
+     * (extremely rare — usually only with 2 players).
+     */
+    public static Tile findRequiredOpeningTile(GameState state) {
+        if (state == null || state.getHands() == null) return null;
+        for (int v : DOUBLE_RANK_ORDER) {
+            Tile dbl = new Tile(v, v);
+            for (java.util.List<Tile> hand : state.getHands().values()) {
+                if (hand != null && hand.contains(dbl)) return dbl;
+            }
+        }
+        return null;
+    }
+
     public static List<Tile> allTiles() {
         List<Tile> tiles = new ArrayList<>();
         for (int a = 0; a <= 6; a++) {
@@ -78,10 +102,10 @@ public final class DominoLogic {
     }
 
     private static String findFirstPlayer(GameState state, List<String> playerIds) {
-        // House rule: lowest double opens the round (smaller double = weaker tile,
-        // so the holder is forced to lead with it).
-        for (int d = 0; d <= 6; d++) {
-            Tile dbl = new Tile(d, d);
+        // Walk doubles in house-rule rank order (1-1 first, then 2-2…6-6, then 0-0
+        // last) and pick the holder of the first one found.
+        for (int v : DOUBLE_RANK_ORDER) {
+            Tile dbl = new Tile(v, v);
             for (String pid : playerIds) {
                 if (state.getHands().get(pid).contains(dbl)) {
                     return pid;
@@ -105,7 +129,9 @@ public final class DominoLogic {
 
     public static boolean canPlay(GameState state, Tile tile) {
         if (state.getBoard() == null || state.getBoard().isEmpty()) {
-            return true;
+            // First move: only the forced opening tile is legal (if any double exists).
+            Tile required = findRequiredOpeningTile(state);
+            return required == null || required.equals(tile);
         }
         return tile.matches(state.getLeftEnd()) || tile.matches(state.getRightEnd());
     }
@@ -113,7 +139,11 @@ public final class DominoLogic {
     public static boolean canPlayerMakeMove(GameState state, String playerId) {
         List<Tile> hand = state.getHands().get(playerId);
         if (hand == null || hand.isEmpty()) return false;
-        if (state.getBoard() == null || state.getBoard().isEmpty()) return true;
+        if (state.getBoard() == null || state.getBoard().isEmpty()) {
+            // First move: only the holder of the required opening tile can move.
+            Tile required = findRequiredOpeningTile(state);
+            return required == null || hand.contains(required);
+        }
         for (Tile t : hand) {
             if (canPlay(state, t)) return true;
         }
@@ -135,6 +165,12 @@ public final class DominoLogic {
         if (inHand == null) return false;
 
         if (state.getBoard().isEmpty()) {
+            // Enforce the opening-double rule at the logic layer too — defence in depth
+            // against a tampered client pushing a non-required first move.
+            Tile required = findRequiredOpeningTile(state);
+            if (required != null && !required.equals(inHand)) {
+                return false;
+            }
             hand.remove(inHand);
             state.getBoard().add(inHand);
             state.setLeftEnd(inHand.getA());
