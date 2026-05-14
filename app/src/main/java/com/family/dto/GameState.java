@@ -15,6 +15,13 @@ public class GameState {
     private int leftEnd = -1;
     /** Open value on the right end of the chain. -1 if board is empty. */
     private int rightEnd = -1;
+    /**
+     * Index in {@link #board} of the very first tile played this round (the anchor).
+     * Increases by 1 each time a tile is added to the left; unchanged for right adds.
+     * Used to split the chain into "left of centre" and "right of centre" counts so
+     * the UI can auto-balance when both ends carry the same pip value.
+     */
+    private int anchorIndex = 0;
     /** playerId -> tiles in that player's hand. */
     private Map<String, List<Tile>> hands = new HashMap<>();
     /** Remaining tiles to draw from. Empty when 4 players (all dealt). */
@@ -50,6 +57,9 @@ public class GameState {
 
     public int getRightEnd() { return rightEnd; }
     public void setRightEnd(int rightEnd) { this.rightEnd = rightEnd; }
+
+    public int getAnchorIndex() { return anchorIndex; }
+    public void setAnchorIndex(int anchorIndex) { this.anchorIndex = anchorIndex; }
 
     public Map<String, List<Tile>> getHands() { return hands; }
     public void setHands(Map<String, List<Tile>> hands) { this.hands = hands; }

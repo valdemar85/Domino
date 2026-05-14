@@ -270,27 +270,43 @@ public class GameActivity extends AppCompatActivity {
         boolean matchesRight = tile.matches(s.getRightEnd());
         if (!matchesLeft && !matchesRight) return;
 
-        if (matchesLeft && matchesRight && s.getLeftEnd() != s.getRightEnd()) {
-            // Phrase the choice in terms of the matching value, not "left/right".
-            // Two reasons:
-            //   1. Android's positive button usually renders on the right of the dialog,
-            //      so a button labelled "Слева" appears on the right side of the screen —
-            //      confusing. A label like "К 5" is unambiguous regardless of position.
-            //   2. When the future snake layout wraps the chain around corners, "left"
-            //      and "right" no longer correspond to any visible direction — the
-            //      chain's ends can sit anywhere on screen. Naming the value future-proofs
-            //      this UI.
+        if (matchesLeft && matchesRight) {
+            if (s.getLeftEnd() == s.getRightEnd()) {
+                // Both open ends carry the same pip value, so the player's choice is
+                // visually ambiguous — auto-place on the shorter branch (counted from
+                // the centre anchor) to keep the snake balanced.
+                int leftCount = s.getAnchorIndex();
+                int rightCount = s.getBoard().size() - 1 - s.getAnchorIndex();
+                applyTilePlay(tile, leftCount < rightCount);
+                return;
+            }
+            // Ends differ — let the player pick. The dialog only fires when the tile is
+            // the exact bridge (leftEnd|rightEnd), so each placement unifies the chain
+            // on the OPPOSITE end's value: placing on the left exposes the tile's other
+            // face (= rightEnd), making both ends equal to rightEnd, and symmetrically
+            // for the right placement. Label each button by that resulting shared value.
             new MaterialAlertDialogBuilder(this)
-                    .setTitle("Куда приложить?")
-                    .setMessage("Костяшка подходит к обоим концам цепочки.")
-                    .setPositiveButton("К " + s.getLeftEnd(),
+                    .setPositiveButton(sideName(s.getRightEnd()),
                             (d, w) -> applyTilePlay(tile, true))
-                    .setNegativeButton("К " + s.getRightEnd(),
+                    .setNegativeButton(sideName(s.getLeftEnd()),
                             (d, w) -> applyTilePlay(tile, false))
                     .show();
             return;
         }
         applyTilePlay(tile, matchesLeft);
+    }
+
+    private static String sideName(int value) {
+        switch (value) {
+            case 0: return "По черепахе";
+            case 1: return "По широкой";
+            case 2: return "По крабу";
+            case 3: return "По зеку";
+            case 4: return "По дельфину";
+            case 5: return "По золотой";
+            case 6: return "По коню";
+            default: return "К " + value;
+        }
     }
 
     private void applyTilePlay(Tile tile, boolean leftSide) {

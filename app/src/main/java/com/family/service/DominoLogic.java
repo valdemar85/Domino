@@ -70,6 +70,7 @@ public final class DominoLogic {
         state.setBoard(new ArrayList<>());
         state.setLeftEnd(-1);
         state.setRightEnd(-1);
+        state.setAnchorIndex(0);
         state.setHands(new HashMap<>());
         state.setBazaar(new ArrayList<>());
         state.setPassCount(0);
@@ -175,6 +176,7 @@ public final class DominoLogic {
             state.getBoard().add(inHand);
             state.setLeftEnd(inHand.getA());
             state.setRightEnd(inHand.getB());
+            state.setAnchorIndex(0);
         } else {
             int targetEnd = leftSide ? state.getLeftEnd() : state.getRightEnd();
             if (!inHand.matches(targetEnd)) {
@@ -196,6 +198,7 @@ public final class DominoLogic {
             if (leftSide) {
                 state.getBoard().add(0, oriented);
                 state.setLeftEnd(newEnd);
+                state.setAnchorIndex(state.getAnchorIndex() + 1);
             } else {
                 state.getBoard().add(oriented);
                 state.setRightEnd(newEnd);
