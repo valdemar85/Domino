@@ -9,7 +9,6 @@ import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.HorizontalScrollView;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -70,8 +69,9 @@ public class GameActivity extends AppCompatActivity {
     private TextView statusText;
     private TextView scoresText;
     private LinearLayout playersInfo;
-    private LinearLayout board;
+    private DominoBoardView board;
     private LinearLayout myHand;
+    private TextView handHint;
     private TextView bazaarInfo;
     private MaterialButton drawButton;
     private MaterialButton nextRoundButton;
@@ -83,6 +83,9 @@ public class GameActivity extends AppCompatActivity {
     private boolean finishedDialogShown = false;
     /** Current board zoom factor, preserved across config changes. */
     private float boardScale = 1f;
+    /** Pan offset applied via setTranslationX/Y while zoomed in. */
+    private float boardTransX = 0f;
+    private float boardTransY = 0f;
 
     private SoundManager soundManager;
 
@@ -107,6 +110,7 @@ public class GameActivity extends AppCompatActivity {
         playersInfo = findViewById(R.id.players_info);
         board = findViewById(R.id.board);
         myHand = findViewById(R.id.my_hand);
+        handHint = findViewById(R.id.hand_hint);
         bazaarInfo = findViewById(R.id.bazaar_info);
         drawButton = findViewById(R.id.draw_button);
         nextRoundButton = findViewById(R.id.next_round_button);
@@ -130,23 +134,16 @@ public class GameActivity extends AppCompatActivity {
     }
 
     /**
-     * Pinch-to-zoom + double-tap-to-reset on the board. Long chains don't fit on a
-     * phone screen at full size, so the user can spread two fingers to magnify a
-     * detail or pinch to see the overall flow. Native HorizontalScrollView still
-     * handles horizontal panning between gestures.
-     *
-     * Note: real chain wrapping with corner turns (a.k.a. "snake" layout) is a much
-     * bigger change — it requires a custom ViewGroup that knows when to rotate the
-     * next tile 90° and break the line. For an MVP, pinch-zoom solves the practical
-     * problem of "I can't see the table".
+     * Pinch to zoom, double-tap to reset, drag with one finger to pan when zoomed.
+     * Replaces the previous HorizontalScrollView-based setup — the snake layout now
+     * fills the whole board, so panning is done via View.setTranslationX/Y instead
+     * of a scroll container.
      */
     private void setupBoardZoom() {
-        HorizontalScrollView boardScroll = findViewById(R.id.board_scroll);
         ScaleGestureDetector scaleDetector = new ScaleGestureDetector(this,
                 new ScaleGestureDetector.SimpleOnScaleGestureListener() {
                     @Override
                     public boolean onScaleBegin(ScaleGestureDetector d) {
-                        // Pivot on the gesture's focal point so zoom feels natural.
                         board.setPivotX(d.getFocusX());
                         board.setPivotY(d.getFocusY());
                         return true;
@@ -154,28 +151,42 @@ public class GameActivity extends AppCompatActivity {
                     @Override
                     public boolean onScale(ScaleGestureDetector d) {
                         boardScale *= d.getScaleFactor();
-                        boardScale = Math.max(0.5f, Math.min(boardScale, 2.5f));
+                        boardScale = Math.max(0.5f, Math.min(boardScale, 3.0f));
                         board.setScaleX(boardScale);
                         board.setScaleY(boardScale);
                         return true;
                     }
                 });
-        GestureDetector tapDetector = new GestureDetector(this,
+        GestureDetector gestureDetector = new GestureDetector(this,
                 new GestureDetector.SimpleOnGestureListener() {
                     @Override
                     public boolean onDoubleTap(MotionEvent e) {
+                        // Reset both zoom and pan on double tap.
                         boardScale = 1f;
+                        boardTransX = 0f;
+                        boardTransY = 0f;
                         board.setScaleX(1f);
                         board.setScaleY(1f);
+                        board.setTranslationX(0f);
+                        board.setTranslationY(0f);
+                        return true;
+                    }
+                    @Override
+                    public boolean onScroll(MotionEvent e1, MotionEvent e2, float dx, float dy) {
+                        // Only pan when zoomed in — otherwise drags don't make sense
+                        // (chain fits, no need to scroll).
+                        if (boardScale <= 1.02f) return false;
+                        boardTransX -= dx;
+                        boardTransY -= dy;
+                        board.setTranslationX(boardTransX);
+                        board.setTranslationY(boardTransY);
                         return true;
                     }
                 });
-        boardScroll.setOnTouchListener((v, event) -> {
+        board.setOnTouchListener((v, event) -> {
             scaleDetector.onTouchEvent(event);
-            tapDetector.onTouchEvent(event);
-            // Consume the event only while a pinch is active — otherwise let the
-            // ScrollView pan as normal.
-            return scaleDetector.isInProgress();
+            gestureDetector.onTouchEvent(event);
+            return true; // we own touches on the board area
         });
     }
 
@@ -446,6 +457,7 @@ public class GameActivity extends AppCompatActivity {
         renderBoard(s, addedOnLeft, addedOnRight);
         renderMyHand(s);
         renderControls(s);
+        renderHandHint(s);
 
         if (s.isFinished()) {
             showFinishedDialogOnce(s);
@@ -516,44 +528,85 @@ public class GameActivity extends AppCompatActivity {
     }
 
     private void renderBoard(GameState s, boolean animateLeft, boolean animateRight) {
-        board.removeAllViews();
-        if (s.getBoard() == null) return;
-        int size = s.getBoard().size();
-        for (int i = 0; i < size; i++) {
-            View tileView = createTileView(s.getBoard().get(i), false, false);
-            boolean shouldAnimate = (i == 0 && animateLeft)
-                    || (i == size - 1 && animateRight);
-            if (shouldAnimate) {
-                animateTileEntry(tileView);
-            }
-            board.addView(tileView);
-        }
-        board.post(() -> {
-            View parent = (View) board.getParent();
-            if (parent instanceof android.widget.HorizontalScrollView) {
-                // Scroll to whichever end the new tile landed on so the player can see it.
-                ((android.widget.HorizontalScrollView) parent)
-                        .fullScroll(animateLeft ? View.FOCUS_LEFT : View.FOCUS_RIGHT);
-            }
-        });
+        java.util.List<Tile> chain = s.getBoard() == null
+                ? new java.util.ArrayList<>()
+                : s.getBoard();
+        // Mark which tile gets the entry animation (newly added, on the side it appeared on).
+        int animateIndex = -1;
+        int size = chain.size();
+        if (animateLeft && size > 0) animateIndex = 0;
+        else if (animateRight && size > 0) animateIndex = size - 1;
+
+        // Delegate snake layout to DominoBoardView. We supply the per-tile renderer
+        // because GameActivity owns the visual style (assets, badges, borders).
+        board.setTiles(chain, animateIndex, (tile, verticalOrientation, faceSizePx) ->
+                createBoardTileView(tile, verticalOrientation, faceSizePx));
     }
 
     /**
-     * Tile entry animation: start at 30% size + invisible, snap to 100% with a slight
-     * overshoot. Quick (200ms) so it doesn't slow down the game pace, but enough to
-     * draw the eye to where the new tile landed.
+     * Render one board tile at the orientation chosen by DominoBoardView's snake
+     * algorithm. Unlike hand tiles (always vertical, see renderMyHand), board tiles
+     * follow the chain — horizontal/vertical depending on segment direction and
+     * whether the tile is a double.
      */
-    private void animateTileEntry(View tileView) {
-        tileView.setAlpha(0f);
-        tileView.setScaleX(0.3f);
-        tileView.setScaleY(0.3f);
-        tileView.animate()
-                .alpha(1f)
-                .scaleX(1f)
-                .scaleY(1f)
-                .setDuration(220)
-                .setInterpolator(new android.view.animation.OvershootInterpolator(1.6f))
-                .start();
+    private View createBoardTileView(Tile tile, boolean verticalOrientation, int faceSizePx) {
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(verticalOrientation ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
+        container.setGravity(Gravity.CENTER);
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(ContextCompat.getColor(this, R.color.domino_surface));
+        bg.setStroke(dp(1), ContextCompat.getColor(this, R.color.domino_outline));
+        bg.setCornerRadius(dp(4));
+        container.setBackground(bg);
+
+        int innerPadding = dp(1);
+        container.setPadding(innerPadding, innerPadding, innerPadding, innerPadding);
+
+        container.addView(createFacePx(tile.getA(), faceSizePx));
+        View strip = new View(this);
+        LinearLayout.LayoutParams stripLp = verticalOrientation
+                ? new LinearLayout.LayoutParams(faceSizePx, dp(1))
+                : new LinearLayout.LayoutParams(dp(1), faceSizePx);
+        strip.setLayoutParams(stripLp);
+        strip.setBackgroundResource(R.color.domino_on_surface_muted);
+        container.addView(strip);
+        container.addView(createFacePx(tile.getB(), faceSizePx));
+        return container;
+    }
+
+    /** Same shape as createFace but accepts size in pixels (used by the snake board). */
+    private android.widget.FrameLayout createFacePx(int value, int sizePx) {
+        android.widget.FrameLayout fl = new android.widget.FrameLayout(this);
+        fl.setLayoutParams(new LinearLayout.LayoutParams(sizePx, sizePx));
+
+        android.widget.ImageView iv = new android.widget.ImageView(this);
+        iv.setLayoutParams(new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT));
+        iv.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        Drawable d = getFaceDrawable(value);
+        if (d != null) iv.setImageDrawable(d);
+        fl.addView(iv);
+
+        TextView badge = new TextView(this);
+        android.widget.FrameLayout.LayoutParams nlp = new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT);
+        nlp.gravity = Gravity.TOP | Gravity.START;
+        nlp.setMargins(dp(1), 0, 0, 0);
+        badge.setLayoutParams(nlp);
+        badge.setText(String.valueOf(value));
+        badge.setTextSize(9);
+        badge.setTextColor(ContextCompat.getColor(this, R.color.domino_primary_dark));
+        GradientDrawable badgeBg = new GradientDrawable();
+        badgeBg.setColor(0xCCFFFFFF);
+        badgeBg.setCornerRadius(dp(3));
+        badge.setBackground(badgeBg);
+        badge.setPadding(dp(2), 0, dp(2), 0);
+        fl.addView(badge);
+
+        return fl;
     }
 
     private void renderMyHand(GameState s) {
@@ -589,6 +642,57 @@ public class GameActivity extends AppCompatActivity {
         leaveButton.setText(isMyselfBoss() ? "Закончить игру" : "Выйти");
     }
 
+    /**
+     * Overlay a semi-transparent banner on the hand strip so the player sees the
+     * critical state right where their attention is (on their tiles), instead of
+     * having to glance at the top status row. Three messages worth surfacing:
+     *
+     *   - It's your turn but you have no legal moves: prompt to draw or pass.
+     *   - The round just ended: who won (green for you, blue for someone else).
+     *   - The whole game ended: winner/loser (green if you didn't lose, red if
+     *     you're the one who hit the target score).
+     *
+     * Anything else (normal play with legal moves, or somebody else's turn) → hide.
+     */
+    private void renderHandHint(GameState s) {
+        if (handHint == null) return;
+        String text = null;
+        int bgColor = ContextCompat.getColor(this, R.color.domino_primary);
+
+        if (s.isFinished()) {
+            if (userId.equals(s.getLoserId())) {
+                text = "Вы проиграли!";
+                bgColor = ContextCompat.getColor(this, R.color.domino_error);
+            } else {
+                text = "Игра окончена. Проиграл: " + playerName(s.getLoserId());
+                bgColor = ContextCompat.getColor(this, R.color.domino_success);
+            }
+        } else if (s.isRoundFinished()) {
+            String prefix = s.isFish() ? "Рыба! " : "";
+            if (userId.equals(s.getRoundWinnerId())) {
+                text = prefix + "Вы выиграли раунд!";
+                bgColor = ContextCompat.getColor(this, R.color.domino_success);
+            } else {
+                text = prefix + "Раунд выиграл: " + playerName(s.getRoundWinnerId());
+            }
+        } else if (isMyTurnAndPlayable() && !DominoLogic.canPlayerMakeMove(s, userId)) {
+            boolean bazaarLeft = s.getBazaar() != null && !s.getBazaar().isEmpty();
+            text = bazaarLeft ? "Нет хода — возьмите из базара" : "Нет хода — пропустите ход";
+        }
+
+        if (text == null) {
+            handHint.setVisibility(View.GONE);
+            return;
+        }
+        handHint.setText(text);
+        GradientDrawable bg = new GradientDrawable();
+        // 90% alpha — tiles underneath stay visible through the banner.
+        bg.setColor((0xE6 << 24) | (bgColor & 0x00FFFFFF));
+        bg.setCornerRadius(dp(20));
+        handHint.setBackground(bg);
+        handHint.setVisibility(View.VISIBLE);
+    }
+
     // --- Tile rendering ---------------------------------------------------
 
     /**
@@ -617,18 +721,28 @@ public class GameActivity extends AppCompatActivity {
         container.setGravity(Gravity.CENTER);
 
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(ContextCompat.getColor(this, R.color.domino_surface));
+        // Highlight the playable hand tiles with a tinted background so they pop
+        // against the row of dimmed unplayable tiles. On the board (inHand=false)
+        // and for non-playable hand tiles we keep the plain surface colour.
+        int bgColor = (inHand && playable)
+                ? ContextCompat.getColor(this, R.color.domino_surface_variant)
+                : ContextCompat.getColor(this, R.color.domino_surface);
+        bg.setColor(bgColor);
         int strokeColor = playable
                 ? ContextCompat.getColor(this, R.color.domino_primary)
                 : inHand
                     ? ContextCompat.getColor(this, R.color.domino_on_surface_muted)
                     : ContextCompat.getColor(this, R.color.domino_outline);
-        // Playable tiles get a noticeably thicker border so they pop out of the row
-        // at a glance — 3dp vs 1dp for the rest. 4dp felt too "fat" against the small
-        // face artwork; 3dp is the sweet spot.
-        bg.setStroke(dp(playable ? 3 : 1), strokeColor);
+        // Playable tiles get a much thicker border so they pop out of the row at a
+        // glance: 4dp vs 1dp for the rest.
+        bg.setStroke(dp(playable ? 4 : 1), strokeColor);
         bg.setCornerRadius(dp(4));
         container.setBackground(bg);
+        // Dim non-playable hand tiles so the eye lands on the legal moves. Full
+        // alpha for board tiles regardless — they're not interactive.
+        if (inHand) {
+            container.setAlpha(playable ? 1f : 0.45f);
+        }
 
         int innerPadding = dp(2);
         container.setPadding(innerPadding, innerPadding, innerPadding, innerPadding);

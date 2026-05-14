@@ -71,8 +71,10 @@
             android:orientation="horizontal"/>
     </HorizontalScrollView>
 
-    <!-- BOARD — biggest space. Pinch-to-zoom, double-tap to reset zoom,
-         horizontal scroll for long chains. -->
+    <!-- BOARD — DominoBoardView lays out tiles as a snake, turning 90° when the
+         chain reaches an edge. Pinch-to-zoom is wired on the view itself in
+         GameActivity.setupBoardZoom. No outer scroll container — the snake is
+         supposed to fit; if it doesn't, the user zooms out. -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/board_card"
         style="@style/Widget.Domino.Card"
@@ -84,21 +86,11 @@
         app:layout_constraintBottom_toTopOf="@id/controls"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
-        <HorizontalScrollView
-            android:id="@+id/board_scroll"
+        <com.family.activity.DominoBoardView
+            android:id="@+id/board"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:clipChildren="false"
-            android:clipToPadding="false"
-            android:scrollbars="none">
-            <LinearLayout
-                android:id="@+id/board"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:padding="12dp"/>
-        </HorizontalScrollView>
+            android:clipChildren="false"/>
     </com.google.android.material.card.MaterialCardView>
 
     <LinearLayout
@@ -162,12 +154,37 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:scrollbars="none">
+            <!-- minHeight keeps the hand strip the same height even when the player
+                 has zero tiles left (e.g. just won the round). Otherwise the strip
+                 collapses to padding and the board card stretches to fill the gap,
+                 which we don't want after a win — the layout stays stable. -->
             <LinearLayout
                 android:id="@+id/my_hand"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:minHeight="112dp"
                 android:orientation="horizontal"
                 android:padding="8dp"/>
         </HorizontalScrollView>
+
+        <!-- Semi-transparent banner overlaid on the hand strip. Surfaces important
+             state right where the player's attention sits (their tiles), so the
+             header status — Visible only when there's something actionable to
+             communicate (your turn but no moves, round/game outcome). -->
+        <TextView
+            android:id="@+id/hand_hint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:paddingStart="20dp"
+            android:paddingEnd="20dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:textColor="#FFFFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:elevation="4dp"
+            android:visibility="gone"/>
     </com.google.android.material.card.MaterialCardView>
 </androidx.constraintlayout.widget.ConstraintLayout>

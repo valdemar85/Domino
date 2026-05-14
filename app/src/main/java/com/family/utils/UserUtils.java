@@ -11,7 +11,7 @@ public class UserUtils {
     private static final String KEY_USER_UUID = "user_uuid";
     private static final String KEY_USER_NAME = "user_name";
 
-    private static final String[] DEFAULT_NAMES = {"Альбертик", "Джузеппе", "Пипа", "Бобик", "Слон", "Гришка", "ВасяПупкин", "Горпына", "Чиполино", "Тараканище", "Губозакаточный", "Кабан", "Бегемот", "Чикибамбони", "Забияка", "Чирипыжик", "Карлос", "Гонсалес"};
+    private static final String[] DEFAULT_NAMES = {"Альбертик", "Джузеппе", "Пипа", "Бобик", "Слон", "Гришка", "ВасяПупкин", "Горпына", "Чиполино", "Тараканище", "Губозакаточный", "Кабан", "Бегемот", "Чикибамбони", "Забияка", "Чирипыжик", "Карлос", "Гонсалес", "Кенджови"};
 
     /**
      * Returns a stable per-install identifier. Generated once on first launch and
