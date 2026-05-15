@@ -9,10 +9,13 @@ import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
@@ -270,6 +273,20 @@ public class GameActivity extends AppCompatActivity {
         boolean matchesRight = tile.matches(s.getRightEnd());
         if (!matchesLeft && !matchesRight) return;
 
+        // Double-double combo (house rule): if the tapped tile is a double matching
+        // one end only AND the hand also holds another double matching the OTHER end,
+        // both doubles must play together in a single turn. Handled before the
+        // bridge/auto-balance branches because those only run when matchesLeft
+        // && matchesRight, which doesn't apply here.
+        if (tile.getA() == tile.getB() && matchesLeft != matchesRight) {
+            int otherEnd = matchesLeft ? s.getRightEnd() : s.getLeftEnd();
+            Tile otherDouble = findOtherDouble(s.getHands().get(userId), otherEnd, tile);
+            if (otherDouble != null) {
+                applyDoubleDoublePlay(tile, matchesLeft, otherDouble, !matchesLeft);
+                return;
+            }
+        }
+
         if (matchesLeft && matchesRight) {
             if (s.getLeftEnd() == s.getRightEnd()) {
                 // Both open ends carry the same pip value, so the player's choice is
@@ -284,16 +301,66 @@ public class GameActivity extends AppCompatActivity {
             // the exact bridge (leftEnd|rightEnd), so each placement unifies the chain
             // on the OPPOSITE end's value: placing on the left exposes the tile's other
             // face (= rightEnd), making both ends equal to rightEnd, and symmetrically
-            // for the right placement. Label each button by that resulting shared value.
-            new MaterialAlertDialogBuilder(this)
-                    .setPositiveButton(sideName(s.getRightEnd()),
-                            (d, w) -> applyTilePlay(tile, true))
-                    .setNegativeButton(sideName(s.getLeftEnd()),
-                            (d, w) -> applyTilePlay(tile, false))
-                    .show();
+            // for the right placement.
+            showPickSideDialog(tile, s);
             return;
         }
         applyTilePlay(tile, matchesLeft);
+    }
+
+    /**
+     * Compact pick-side dialog: a horizontal pair of buttons rather than a full
+     * AlertDialog. Two reasons:
+     *  - Without title/message, MaterialAlertDialog still reserves the content
+     *    area, leaving a big empty band on the left of the buttons. wrap_content
+     *    on a custom view collapses the dialog to exactly the buttons' width.
+     *  - The dialog is anchored to the bottom edge of the board card, so it sits
+     *    just above the hand strip — close to where the player just tapped, not
+     *    floating in the centre of the screen.
+     */
+    private void showPickSideDialog(Tile tile, GameState s) {
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.HORIZONTAL);
+        content.setPadding(dp(8), dp(8), dp(8), dp(8));
+
+        MaterialButton btnPositive = new MaterialButton(this);
+        btnPositive.setText(sideName(s.getRightEnd()));
+        LinearLayout.LayoutParams posLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        posLp.setMarginEnd(dp(8));
+        btnPositive.setLayoutParams(posLp);
+        content.addView(btnPositive);
+
+        MaterialButton btnNegative = new MaterialButton(this);
+        btnNegative.setText(sideName(s.getLeftEnd()));
+        content.addView(btnNegative);
+
+        AlertDialog dialog = new MaterialAlertDialogBuilder(this)
+                .setView(content)
+                .create();
+
+        btnPositive.setOnClickListener(v -> { dialog.dismiss(); applyTilePlay(tile, true); });
+        btnNegative.setOnClickListener(v -> { dialog.dismiss(); applyTilePlay(tile, false); });
+
+        dialog.setOnShowListener(d -> {
+            Window w = dialog.getWindow();
+            if (w == null) return;
+            WindowManager.LayoutParams lp = w.getAttributes();
+            lp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+            lp.width = WindowManager.LayoutParams.WRAP_CONTENT;
+            // Position the dialog's bottom edge a hair above the board's bottom edge.
+            // board has already been laid out by the time the user could tap a tile.
+            int[] loc = new int[2];
+            board.getLocationOnScreen(loc);
+            int boardBottom = loc[1] + board.getHeight();
+            int screenHeight = getResources().getDisplayMetrics().heightPixels;
+            lp.y = Math.max(dp(8), (screenHeight - boardBottom) + dp(8));
+            // Dim the rest of the screen less aggressively — the dialog is small and
+            // sits near the action; a heavy scrim would obscure the board context.
+            lp.dimAmount = 0.2f;
+            w.setAttributes(lp);
+        });
+        dialog.show();
     }
 
     private static String sideName(int value) {
@@ -317,6 +384,38 @@ public class GameActivity extends AppCompatActivity {
             if (!userId.equals(current)) return false;
             return DominoLogic.playTile(gs, userId, tile, leftSide);
         });
+    }
+
+    /**
+     * Place two doubles in a single atomic turn: one on each end of the chain.
+     * playTile() advances the turn after each play, so we rewind it between the
+     * two plays — the combo counts as one move.
+     */
+    private void applyDoubleDoublePlay(Tile first, boolean firstLeftSide,
+                                       Tile second, boolean secondLeftSide) {
+        applyMove(g -> {
+            GameState gs = g.getState();
+            if (gs == null || gs.isRoundFinished()) return false;
+            String current = gs.getPlayerOrder().get(gs.getCurrentTurnIndex());
+            if (!userId.equals(current)) return false;
+            int turnBefore = gs.getCurrentTurnIndex();
+            if (!DominoLogic.playTile(gs, userId, first, firstLeftSide)) return false;
+            // First play already won the round — don't play the second, just commit.
+            if (gs.isRoundFinished()) return true;
+            gs.setCurrentTurnIndex(turnBefore);
+            return DominoLogic.playTile(gs, userId, second, secondLeftSide);
+        });
+    }
+
+    /** Find a double in {@code hand} (other than {@code exclude}) that matches {@code targetEnd}. */
+    private static Tile findOtherDouble(List<Tile> hand, int targetEnd, Tile exclude) {
+        if (hand == null) return null;
+        for (Tile t : hand) {
+            if (t.equals(exclude)) continue;
+            if (t.getA() != t.getB()) continue;
+            if (t.matches(targetEnd)) return t;
+        }
+        return null;
     }
 
     private void onNextRound() {
@@ -730,7 +829,9 @@ public class GameActivity extends AppCompatActivity {
     private View createTileView(Tile tile, boolean inHand, boolean playable) {
         boolean isDouble = tile.getA() == tile.getB();
         boolean vertical = inHand || isDouble;
-        int faceDp = inHand ? 40 : 32;
+        // Hand tiles scale up on tablets — the default 40dp leaves a lot of empty
+        // strip on sw≥600dp devices.
+        int faceDp = inHand ? handFaceDp() : 32;
 
         LinearLayout container = new LinearLayout(this);
         container.setOrientation(vertical ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
@@ -832,6 +933,16 @@ public class GameActivity extends AppCompatActivity {
 
     private int dp(int value) {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
+    }
+
+    private int handFaceDp() {
+        // Three tiers: phone (40), mid-size tablet (48), large tablet (56). The
+        // jump from 40→56 on every sw≥600 device made medium tablets feel too
+        // chunky relative to the board.
+        int sw = getResources().getConfiguration().smallestScreenWidthDp;
+        if (sw >= 720) return 56;
+        if (sw >= 600) return 48;
+        return 40;
     }
 
     private String playerName(String playerId) {

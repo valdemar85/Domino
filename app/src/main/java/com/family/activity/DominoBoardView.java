@@ -132,14 +132,23 @@ public class DominoBoardView extends FrameLayout {
         // any reset here would lose the chain the player is looking at.
     }
 
-    /** Pick a face size that gives a comfortable number of tiles per row. */
+    /**
+     * Pick a face size so the full 28-tile chain fits visibly without zoom.
+     *
+     * The snake wraps as a series of rows, so BOTH axes constrain the tile size:
+     *   - Width: ~5 tiles per row (each tile = 2*face) → face ≈ width / 10.
+     *   - Height: chain needs ~6 rows of width≈2*face on a wide canvas → height
+     *     budget per row is roughly 2*face, so face ≈ height / 8.
+     * Picking the tighter of the two prevents medium tablets (where height/8 is
+     * the binding constraint) from rendering tiles so large that a long chain
+     * spills off the bottom. The upper clamp is a readability ceiling.
+     */
     private void adaptFaceSize() {
         float density = getResources().getDisplayMetrics().density;
         int viewWidthDp = (int) (getWidth() / density);
-        // ~5 tiles per row (each tile = 2*face) → face ≈ width / 10. Clamped so
-        // pip artwork stays readable on phones and isn't oversized on tablets.
-        int candidate = viewWidthDp / 10;
-        faceSizeDp = Math.min(52, Math.max(28, candidate));
+        int viewHeightDp = (int) (getHeight() / density);
+        int candidate = Math.min(viewWidthDp / 10, viewHeightDp / 8);
+        faceSizeDp = Math.min(56, Math.max(28, candidate));
     }
 
     private int dp(int v) {

@@ -257,7 +257,6 @@ public class MainActivity extends AppCompatActivity {
             }
             playerNameInput.setEnabled(false);
             currentTeamName.setText(currentGame.getName());
-            precessMessages(currentGame);
         } else {
             teamListCard.setVisibility(View.VISIBLE);
             currentTeamCard.setVisibility(View.GONE);
@@ -267,6 +266,12 @@ public class MainActivity extends AppCompatActivity {
             startGameButton.setVisibility(View.GONE);
             playerNameInput.setEnabled(true);
         }
+        // Run unconditionally — ALERT messages (e.g. boss declining a join request)
+        // are sent to the boss's currentGame, which the guest is NOT a member of.
+        // If we only processed messages when our own currentGame is set, those
+        // alerts would never surface to a player without a team, and would later
+        // pop up stale in a different team's context.
+        precessMessages(currentGame);
         teamTableAdapter.notifyDataSetChanged();
         currentGameTableAdapter.notifyDataSetChanged();
     }
@@ -292,19 +297,40 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void precessMessages(Game currentGame) {
-        List<Message> messages = currentGame.getMessages();
-        Iterator<Message> it = messages.iterator();
-        while (it.hasNext()) {
-            Message message = it.next();
-            if (message.getToId().equals(gameService.getCurrentPlayer().getId())) {
-                if (message.getMessageType().equals(TEAM_PARTICIPATION_REQUEST)) {
-                    alertBossTeamParticipationRequest(message.getFromId(), message.getFromName(), currentGame);
-                } else if (message.getMessageType().equals(ALERT)) {
-                    processAlertMessage(message.getMessageText());
+        Player currentPlayer = gameService.getCurrentPlayer();
+        if (currentPlayer == null) return;
+        String myId = currentPlayer.getId();
+
+        // TEAM_PARTICIPATION_REQUEST is only ever sent into the boss's team —
+        // bound to currentGame.
+        if (currentGame != null) {
+            Iterator<Message> it = currentGame.getMessages().iterator();
+            while (it.hasNext()) {
+                Message m = it.next();
+                if (myId.equals(m.getToId())
+                        && TEAM_PARTICIPATION_REQUEST.equals(m.getMessageType())) {
+                    alertBossTeamParticipationRequest(m.getFromId(), m.getFromName(), currentGame);
+                    it.remove();
+                    gameSyncService.saveGame(currentGame);
+                    return;
                 }
-                it.remove();
-                gameSyncService.saveGame(currentGame);
-                break;
+            }
+        }
+
+        // ALERTs can land in any game. The boss writes them into their OWN
+        // currentGame, but the recipient may have no current game at all (a guest
+        // who just got declined). Scan every visible game so the alert isn't lost
+        // and doesn't later surface stale after the guest joins a different team.
+        for (Game g : gameService.getGames()) {
+            Iterator<Message> it = g.getMessages().iterator();
+            while (it.hasNext()) {
+                Message m = it.next();
+                if (myId.equals(m.getToId()) && ALERT.equals(m.getMessageType())) {
+                    processAlertMessage(m.getMessageText());
+                    it.remove();
+                    gameSyncService.saveGame(g);
+                    return;
+                }
             }
         }
     }
