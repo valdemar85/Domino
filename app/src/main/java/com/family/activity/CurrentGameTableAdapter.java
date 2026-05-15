@@ -12,6 +12,7 @@ import com.family.dto.Game;
 import com.family.dto.Player;
 import com.family.service.GameService;
 import com.family.service.GameSyncService;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import static com.google.android.gms.common.util.CollectionUtils.isEmpty;
 
@@ -74,22 +75,38 @@ public class CurrentGameTableAdapter extends RecyclerView.Adapter<CurrentGameVie
             return;
         }
 
+        // Both "Выйти" and "Выгнать" are destructive and irreversible — once you
+        // leave/are kicked, the team list shows you nothing to rejoin. A confirm
+        // step prevents the common pattern of an accidental tap removing a player
+        // mid-conversation. Final removal logic is the same for both flows.
+        boolean leavingMyself = isMe;
+        String title = leavingMyself ? "Выйти из команды?" : "Выгнать игрока?";
+        String message = leavingMyself
+                ? "После выхода вернуться в эту команду можно будет только по новому одобрению босса."
+                : "Игрок " + player.getName() + " будет удалён из команды.";
+        String confirm = leavingMyself ? "Выйти" : "Выгнать";
         holder.kickButton.setOnClickListener(v -> {
-            // Resolve everything fresh at click time — currentGame ref may have been
-            // refreshed by setGames() between bind and click.
-            Game game = gameService.getCurrentGame();
-            if (game == null) return;
-            int pos = holder.getAdapterPosition();
-            if (pos == RecyclerView.NO_POSITION || pos >= game.getPlayers().size()) return;
-            game.getPlayers().remove(pos);
-            if (isEmpty(game.getPlayers())) {
-                // Edge case — should not happen since boss is always present, but be safe
-                gameService.removeGame(game.getId());
-                gameSyncService.removeGame(game.getId());
-            } else {
-                gameSyncService.saveGame(game);
-            }
+            new MaterialAlertDialogBuilder(holder.itemView.getContext())
+                    .setTitle(title)
+                    .setMessage(message)
+                    .setPositiveButton(confirm, (d, w) -> performRemoval(holder))
+                    .setNegativeButton("Отмена", null)
+                    .show();
         });
+    }
+
+    private void performRemoval(CurrentGameViewHolder holder) {
+        Game game = gameService.getCurrentGame();
+        if (game == null) return;
+        int pos = holder.getAdapterPosition();
+        if (pos == RecyclerView.NO_POSITION || pos >= game.getPlayers().size()) return;
+        game.getPlayers().remove(pos);
+        if (isEmpty(game.getPlayers())) {
+            gameService.removeGame(game.getId());
+            gameSyncService.removeGame(game.getId());
+        } else {
+            gameSyncService.saveGame(game);
+        }
     }
 
     @Override

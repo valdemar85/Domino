@@ -10,8 +10,8 @@ android {
         applicationId "com.family.app"
         minSdk 21
         targetSdk 34
-        versionCode 1
-        versionName "1.0"
+        versionCode 3
+        versionName "1.2"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -35,8 +35,7 @@ dependencies {
     implementation 'androidx.constraintlayout:constraintlayout:2.0.4'
     implementation platform('com.google.firebase:firebase-bom:33.5.1') // Firebase BOM
     implementation 'com.google.firebase:firebase-database'
-    implementation 'com.google.firebase:firebase-analytics'
-    implementation 'androidx.recyclerview:recyclerview:1.2.1'// Firebase Analytics
+    implementation 'androidx.recyclerview:recyclerview:1.2.1'
     implementation 'androidx.cardview:cardview:1.0.0'
     testImplementation 'junit:junit:4.+'
     androidTestImplementation 'androidx.test.ext:junit:1.1.2'

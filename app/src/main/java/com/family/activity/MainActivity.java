@@ -123,11 +123,21 @@ public class MainActivity extends AppCompatActivity {
 
         disbandTeamButton.setOnClickListener(v -> {
             Game current = gameService.getCurrentGame();
-            if (current != null) {
-                gameSyncService.removeGame(current.getId());
-                gameService.removeGame(current.getId());
-                updateUI();
-            }
+            if (current == null) return;
+            // Disband is irreversible — every player loses their seat. Confirm
+            // before removing.
+            new MaterialAlertDialogBuilder(this)
+                    .setTitle("Распустить команду?")
+                    .setMessage("Все игроки выйдут из команды, а команда будет удалена.")
+                    .setPositiveButton("Распустить", (d, w) -> {
+                        Game g = gameService.getCurrentGame();
+                        if (g == null) return;
+                        gameSyncService.removeGame(g.getId());
+                        gameService.removeGame(g.getId());
+                        updateUI();
+                    })
+                    .setNegativeButton("Отмена", null)
+                    .show();
         });
 
         startGameButton.setOnClickListener(v -> {

@@ -96,6 +96,8 @@ public class GameActivity extends AppCompatActivity {
     private int previousBoardSize = 0;
     private int previousLeftEnd = -1;
     private boolean previousRoundFinished = false;
+    /** -1 means "no baseline yet" — first tick doesn't trigger the draw sound. */
+    private int previousBazaarSize = -1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -119,6 +121,10 @@ public class GameActivity extends AppCompatActivity {
         drawButton.setOnClickListener(v -> onDrawOrPass());
         nextRoundButton.setOnClickListener(v -> onNextRound());
         leaveButton.setOnClickListener(v -> handleLeave());
+        // Manual escape hatch: tap the status line to force a fresh fetch from
+        // Firebase. Useful when the player suspects local state has drifted from
+        // the server's view of whose turn it is.
+        statusText.setOnClickListener(v -> forceRefresh());
 
         setupBoardZoom();
         soundManager = new SoundManager(this);
@@ -212,8 +218,28 @@ public class GameActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         finishedDialogShown = false;
+        // The first render after a resume should establish a baseline only — never
+        // fire the draw sound just because the bazaar shrunk while we were paused.
+        previousBazaarSize = -1;
+        // Force Firebase awake — if the socket was idled out by Doze/Background
+        // limits, the value listener below would otherwise get the cached
+        // last-known state and we'd miss whatever happened while away.
+        FirebaseDatabase.getInstance().goOnline();
         DatabaseReference ref = FirebaseDatabase.getInstance()
                 .getReference("games").child(gameId);
+        // Force a one-shot fresh fetch in parallel with the listener. The cached
+        // listener result is fine 99% of the time, but we've seen instances where
+        // three clients diverged on whose-turn-is-it until one of them closed and
+        // reopened the screen (which forces a re-fetch). The .get() call below
+        // bypasses any local cache and pulls from the server, eliminating that
+        // failure mode without changing the steady-state listener flow.
+        ref.get().addOnSuccessListener(snap -> {
+            Game g = snap.getValue(Game.class);
+            if (g != null) {
+                game = g;
+                render();
+            }
+        });
         gameListener = ref.addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(DataSnapshot snapshot) {
@@ -314,6 +340,19 @@ public class GameActivity extends AppCompatActivity {
             return;
         }
         applyTilePlay(tile, matchesLeft);
+    }
+
+    /** Force a fresh server fetch — used as a manual desync recovery. */
+    private void forceRefresh() {
+        FirebaseDatabase.getInstance().goOnline();
+        FirebaseDatabase.getInstance().getReference("games").child(gameId).get()
+                .addOnSuccessListener(snap -> {
+                    Game g = snap.getValue(Game.class);
+                    if (g != null) {
+                        game = g;
+                        render();
+                    }
+                });
     }
 
     private void applyTilePlay(Tile tile, boolean leftSide) {
@@ -501,6 +540,15 @@ public class GameActivity extends AppCompatActivity {
         if (roundJustEnded && soundManager != null) {
             soundManager.playRoundWin();
         }
+
+        // Bazaar shrunk between ticks → someone drew. Fires for every client so
+        // the table hears the draw, not just the player who tapped.
+        int newBazaarSize = s.getBazaar() == null ? 0 : s.getBazaar().size();
+        if (previousBazaarSize >= 0 && newBazaarSize < previousBazaarSize
+                && soundManager != null) {
+            soundManager.playDraw();
+        }
+        previousBazaarSize = newBazaarSize;
 
         previousBoardSize = newBoardSize;
         previousLeftEnd = s.getLeftEnd();

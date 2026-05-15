@@ -12,8 +12,9 @@ import android.media.SoundPool;
  * compiles cleanly with or without them. To enable real sounds, place these files
  * under app/src/main/res/raw/:
  *
- *   tile_play.ogg  — short tile clack (~150-300 ms)
- *   round_win.ogg  — short fanfare      (~1-2 s)
+ *   tile_play.ogg  — short tile clack    (~150-300 ms)
+ *   tile_draw.ogg  — short shuffle/rustle (~150-300 ms)
+ *   round_win.ogg  — short fanfare        (~1-2 s)
  *
  * Without custom files, falls back to AudioManager's built-in keyclick sounds so
  * the player still gets some auditory feedback.
@@ -22,6 +23,7 @@ public class SoundManager {
     private final Context appContext;
     private SoundPool soundPool;
     private int tilePlaySoundId = 0;
+    private int tileDrawSoundId = 0;
     private int roundWinSoundId = 0;
 
     public SoundManager(Context context) {
@@ -35,6 +37,7 @@ public class SoundManager {
                 .setAudioAttributes(attrs)
                 .build();
         tilePlaySoundId = loadIfPresent("tile_play");
+        tileDrawSoundId = loadIfPresent("tile_draw");
         roundWinSoundId = loadIfPresent("round_win");
     }
 
@@ -50,6 +53,17 @@ public class SoundManager {
             soundPool.play(tilePlaySoundId, 1f, 1f, 1, 0, 1f);
         } else {
             playSystemFallback(AudioManager.FX_KEYPRESS_STANDARD);
+        }
+    }
+
+    public void playDraw() {
+        if (soundPool == null) return;
+        if (tileDrawSoundId != 0) {
+            soundPool.play(tileDrawSoundId, 1f, 1f, 1, 0, 1f);
+        } else {
+            // FX_KEYPRESS_SPACEBAR is a softer, lower-pitched click than the standard
+            // press, which distinguishes a "draw" from a "play" auditorily.
+            playSystemFallback(AudioManager.FX_KEYPRESS_SPACEBAR);
         }
     }
 
