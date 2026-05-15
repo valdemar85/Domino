@@ -9,13 +9,10 @@ import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.Window;
-import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 
@@ -163,6 +160,15 @@ public class GameActivity extends AppCompatActivity {
         GestureDetector gestureDetector = new GestureDetector(this,
                 new GestureDetector.SimpleOnGestureListener() {
                     @Override
+                    public boolean onSingleTapUp(MotionEvent e) {
+                        // Convert tap to view-local coords (board may be scaled/panned)
+                        // and let the board hit-test it against active ghost slots.
+                        // When a pick-side preview is up, this is what places the tile.
+                        float localX = (e.getX() - board.getTranslationX()) / boardScale;
+                        float localY = (e.getY() - board.getTranslationY()) / boardScale;
+                        return board.dispatchPreviewTap(localX, localY);
+                    }
+                    @Override
                     public boolean onDoubleTap(MotionEvent e) {
                         // Reset both zoom and pan on double tap.
                         boardScale = 1f;
@@ -269,6 +275,10 @@ public class GameActivity extends AppCompatActivity {
             applyTilePlay(tile, false);
             return;
         }
+        // A previous tap may have left ghost end-slots on the board. Drop them
+        // before computing fresh moves — the player has clearly moved on.
+        board.setPreviewTile(null, null);
+
         boolean matchesLeft = tile.matches(s.getLeftEnd());
         boolean matchesRight = tile.matches(s.getRightEnd());
         if (!matchesLeft && !matchesRight) return;
@@ -297,83 +307,13 @@ public class GameActivity extends AppCompatActivity {
                 applyTilePlay(tile, leftCount < rightCount);
                 return;
             }
-            // Ends differ — let the player pick. The dialog only fires when the tile is
-            // the exact bridge (leftEnd|rightEnd), so each placement unifies the chain
-            // on the OPPOSITE end's value: placing on the left exposes the tile's other
-            // face (= rightEnd), making both ends equal to rightEnd, and symmetrically
-            // for the right placement.
-            showPickSideDialog(tile, s);
+            // Ends differ — show two ghost slots on the board (one at each end) and
+            // let the player tap directly on the side they want. More direct than a
+            // popup, and leaves the chain fully visible while they decide.
+            board.setPreviewTile(tile, leftSide -> applyTilePlay(tile, leftSide));
             return;
         }
         applyTilePlay(tile, matchesLeft);
-    }
-
-    /**
-     * Compact pick-side dialog: a horizontal pair of buttons rather than a full
-     * AlertDialog. Two reasons:
-     *  - Without title/message, MaterialAlertDialog still reserves the content
-     *    area, leaving a big empty band on the left of the buttons. wrap_content
-     *    on a custom view collapses the dialog to exactly the buttons' width.
-     *  - The dialog is anchored to the bottom edge of the board card, so it sits
-     *    just above the hand strip — close to where the player just tapped, not
-     *    floating in the centre of the screen.
-     */
-    private void showPickSideDialog(Tile tile, GameState s) {
-        LinearLayout content = new LinearLayout(this);
-        content.setOrientation(LinearLayout.HORIZONTAL);
-        content.setPadding(dp(8), dp(8), dp(8), dp(8));
-
-        MaterialButton btnPositive = new MaterialButton(this);
-        btnPositive.setText(sideName(s.getRightEnd()));
-        LinearLayout.LayoutParams posLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        posLp.setMarginEnd(dp(8));
-        btnPositive.setLayoutParams(posLp);
-        content.addView(btnPositive);
-
-        MaterialButton btnNegative = new MaterialButton(this);
-        btnNegative.setText(sideName(s.getLeftEnd()));
-        content.addView(btnNegative);
-
-        AlertDialog dialog = new MaterialAlertDialogBuilder(this)
-                .setView(content)
-                .create();
-
-        btnPositive.setOnClickListener(v -> { dialog.dismiss(); applyTilePlay(tile, true); });
-        btnNegative.setOnClickListener(v -> { dialog.dismiss(); applyTilePlay(tile, false); });
-
-        dialog.setOnShowListener(d -> {
-            Window w = dialog.getWindow();
-            if (w == null) return;
-            WindowManager.LayoutParams lp = w.getAttributes();
-            lp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-            lp.width = WindowManager.LayoutParams.WRAP_CONTENT;
-            // Position the dialog's bottom edge a hair above the board's bottom edge.
-            // board has already been laid out by the time the user could tap a tile.
-            int[] loc = new int[2];
-            board.getLocationOnScreen(loc);
-            int boardBottom = loc[1] + board.getHeight();
-            int screenHeight = getResources().getDisplayMetrics().heightPixels;
-            lp.y = Math.max(dp(8), (screenHeight - boardBottom) + dp(8));
-            // Dim the rest of the screen less aggressively — the dialog is small and
-            // sits near the action; a heavy scrim would obscure the board context.
-            lp.dimAmount = 0.2f;
-            w.setAttributes(lp);
-        });
-        dialog.show();
-    }
-
-    private static String sideName(int value) {
-        switch (value) {
-            case 0: return "По черепахе";
-            case 1: return "По широкой";
-            case 2: return "По крабу";
-            case 3: return "По зеку";
-            case 4: return "По дельфину";
-            case 5: return "По золотой";
-            case 6: return "По коню";
-            default: return "К " + value;
-        }
     }
 
     private void applyTilePlay(Tile tile, boolean leftSide) {
@@ -669,9 +609,14 @@ public class GameActivity extends AppCompatActivity {
         container.setOrientation(verticalOrientation ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
         container.setGravity(Gravity.CENTER);
 
+        // Bolder, darker outline than the default {@code domino_outline}: when two
+        // tiles meet at a matching pip (e.g. 3:5 next to 5:4) a thin pale border
+        // visually melts the seam and the pair reads as a single 5:5. The muted
+        // on-surface tone with a 2dp stroke makes the gap unmistakable while
+        // staying out of the way of the pip artwork.
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(ContextCompat.getColor(this, R.color.domino_surface));
-        bg.setStroke(dp(1), ContextCompat.getColor(this, R.color.domino_outline));
+        bg.setStroke(dp(2), ContextCompat.getColor(this, R.color.domino_on_surface_muted));
         bg.setCornerRadius(dp(4));
         container.setBackground(bg);
 
@@ -743,17 +688,28 @@ public class GameActivity extends AppCompatActivity {
         boolean myTurn = isMyTurnAndPlayable();
         boolean canMove = myTurn && DominoLogic.canPlayerMakeMove(s, userId);
         boolean bazaarLeft = s.getBazaar() != null && !s.getBazaar().isEmpty();
+        boolean roundOver = s.isRoundFinished();
 
-        bazaarInfo.setText(bazaarLeft ? "Базар: " + s.getBazaar().size() : "Базар пуст");
+        // Bazaar count is useful during the round even when it's not my turn —
+        // hide it once the round is over (nothing left to draw or count).
+        if (roundOver) {
+            bazaarInfo.setText("");
+        } else {
+            bazaarInfo.setText(bazaarLeft ? "Базар: " + s.getBazaar().size() : "Базар пуст");
+        }
 
-        // Single button: take from bazaar if there's anything to take; otherwise pass.
-        // The player cannot freely pass when there's a tile to draw — that's against
-        // the rules and would lock the game into a premature fish.
-        drawButton.setEnabled(myTurn && !canMove);
-        drawButton.setText(bazaarLeft ? "Взять" : "Пропустить");
+        // Draw/pass button only when there's something actionable to do — my turn
+        // AND I have no legal move on the board. Otherwise the disabled-but-visible
+        // state is just clutter (especially at round end, where it sat permanently
+        // greyed out).
+        boolean drawVisible = myTurn && !canMove && !roundOver;
+        drawButton.setVisibility(drawVisible ? View.VISIBLE : View.GONE);
+        if (drawVisible) {
+            drawButton.setText(bazaarLeft ? "Взять" : "Пропустить");
+        }
 
         nextRoundButton.setVisibility(
-                isMyselfBoss() && s.isRoundFinished() && !s.isFinished() ? View.VISIBLE : View.GONE);
+                isMyselfBoss() && roundOver && !s.isFinished() ? View.VISIBLE : View.GONE);
         leaveButton.setText(isMyselfBoss() ? "Закончить игру" : "Выйти");
     }
 

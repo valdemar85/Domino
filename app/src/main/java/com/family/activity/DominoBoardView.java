@@ -1,6 +1,7 @@
 package com.family.activity;
 
 import android.content.Context;
+import android.graphics.drawable.GradientDrawable;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.ViewGroup;
@@ -40,6 +41,11 @@ public class DominoBoardView extends FrameLayout {
 
     public interface TileRenderer {
         View create(Tile tile, boolean verticalOrientation, int faceSizePx);
+    }
+
+    /** Fired when the user picks one of the two ghost-tile end slots. */
+    public interface PreviewPicker {
+        void onPick(boolean leftSide);
     }
 
     private static final int DIR_RIGHT = 0;
@@ -82,6 +88,12 @@ public class DominoBoardView extends FrameLayout {
     private int pendingAnimateIndex = -1;
     private boolean pendingRebuild = false;
 
+    // ---- preview / pick-side state ----
+    private Tile previewTile;
+    private PreviewPicker previewPicker;
+    private TilePos previewLeftPos;
+    private TilePos previewRightPos;
+
     public DominoBoardView(Context c) { super(c); init(); }
     public DominoBoardView(Context c, AttributeSet a) { super(c, a); init(); }
     public DominoBoardView(Context c, AttributeSet a, int s) { super(c, a, s); init(); }
@@ -92,15 +104,72 @@ public class DominoBoardView extends FrameLayout {
 
     public void setTiles(List<Tile> newTiles, int animateIndex, TileRenderer r) {
         this.renderer = r;
+        // Detect a fresh round (anchor missing or replaced) so we can restore the
+        // "natural" face size — face only shrinks monotonically WITHIN a round, but
+        // a new round must start from the full screen-derived value.
+        boolean newRound = anchor == null
+                || newTiles == null
+                || newTiles.isEmpty()
+                || !newTiles.contains(anchor);
         this.tiles.clear();
         if (newTiles != null) this.tiles.addAll(newTiles);
         this.pendingAnimateIndex = animateIndex;
+        // A new chain may invalidate the previous preview (different ends, different
+        // anchor). Cheapest correct thing is to drop it; the next hand tap re-creates
+        // it from the fresh state.
+        clearPreview();
         if (getWidth() > 0 && getHeight() > 0) {
-            updateLayout();
+            if (newRound) adaptFaceSize();
+            relayoutFittingChain();
             rebuildChildren();
         } else {
             pendingRebuild = true;
         }
+    }
+
+    /**
+     * Lay out the chain at the current face size. If any tiles overlap or spill
+     * out of the canvas, shrink the face by 2 dp and re-lay-out the whole chain.
+     * Re-layout from scratch preserves the anchor position (always the centre) and
+     * branch directions (deterministic from anchor + face), so the visual change to
+     * the user is just "everything got slightly smaller" — no jumps, no reflow.
+     *
+     * Monotonic only: face never grows back within a round, otherwise the snake
+     * would oscillate around the threshold every couple of moves.
+     */
+    private void relayoutFittingChain() {
+        updateLayout();
+        // Safety floor — below 16 dp the artwork is unreadable; we'd rather have
+        // a slightly-overlapping snake the user can zoom into than illegible tiles.
+        int minFace = 16;
+        int safety = 32;
+        while (!chainFits() && faceSizeDp > minFace && safety-- > 0) {
+            faceSizeDp -= 2;
+            resetLayoutState();
+            updateLayout();
+        }
+    }
+
+    /** True iff no two placed tiles overlap AND all tiles sit inside the canvas. */
+    private boolean chainFits() {
+        if (positionsByTile.isEmpty()) return true;
+        int w = getWidth();
+        int h = getHeight();
+        List<TilePos> all = new ArrayList<>(positionsByTile.values());
+        int n = all.size();
+        for (int i = 0; i < n; i++) {
+            TilePos a = all.get(i);
+            if (a.x < 0 || a.y < 0 || a.x + a.w > w || a.y + a.h > h) return false;
+            for (int j = i + 1; j < n; j++) {
+                TilePos b = all.get(j);
+                if (a.x + a.w <= b.x) continue;
+                if (a.x >= b.x + b.w) continue;
+                if (a.y + a.h <= b.y) continue;
+                if (a.y >= b.y + b.h) continue;
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
@@ -113,7 +182,7 @@ public class DominoBoardView extends FrameLayout {
         if (pendingRebuild) {
             // First real measure since setTiles — lay out from scratch.
             resetLayoutState();
-            updateLayout();
+            relayoutFittingChain();
             rebuildChildren();
             pendingRebuild = false;
             return;
@@ -124,7 +193,7 @@ public class DominoBoardView extends FrameLayout {
             // Tile face size has changed (e.g. screen rotation) — every pixel
             // coordinate is stale, full re-layout.
             resetLayoutState();
-            updateLayout();
+            relayoutFittingChain();
             rebuildChildren();
         }
         // Otherwise the canvas just resized without affecting our math (e.g. the
@@ -204,7 +273,7 @@ public class DominoBoardView extends FrameLayout {
         anchor = tiles.get(0);
         boolean isDouble = anchor.getA() == anchor.getB();
         int face = faceSizePx();
-        int gap = dp(2);
+        int gap = dp(3);
 
         TilePos pos = new TilePos();
         pos.verticalOrientation = isDouble;       // double perpendicular to horizontal chain
@@ -242,7 +311,7 @@ public class DominoBoardView extends FrameLayout {
     private void placeOnBranch(SideState branch, Tile tile, boolean isRightBranch) {
         boolean isDouble = tile.getA() == tile.getB();
         int face = faceSizePx();
-        int gap = dp(2);
+        int gap = dp(3);
         float padding = dp(8);
         // Both branches rotate clockwise — right RIGHT→DOWN, left LEFT→UP.
         final int turnSign = +1;
@@ -408,6 +477,101 @@ public class DominoBoardView extends FrameLayout {
         }
     }
 
+    // ---- preview / pick-side API ----
+
+    /**
+     * Show ghost outlines of {@code tile} at the two ends of the chain so the
+     * player can tap directly on the side they want. Pass {@code tile == null}
+     * (or call {@link #clearPreview()}) to remove the ghosts.
+     */
+    public void setPreviewTile(Tile tile, PreviewPicker picker) {
+        this.previewTile = tile;
+        this.previewPicker = picker;
+        if (tile == null || tiles.isEmpty() || rightSide == null || leftSide == null) {
+            previewLeftPos = null;
+            previewRightPos = null;
+        } else {
+            previewLeftPos  = computePreviewPosition(tile, false);
+            previewRightPos = computePreviewPosition(tile, true);
+        }
+        rebuildChildren();
+    }
+
+    public void clearPreview() {
+        if (previewTile == null && previewPicker == null
+                && previewLeftPos == null && previewRightPos == null) return;
+        previewTile = null;
+        previewPicker = null;
+        previewLeftPos = null;
+        previewRightPos = null;
+    }
+
+    /**
+     * Hit-test a tap against the ghosts. Returns true when there's an active
+     * preview — in which case the tap is consumed: a hit on a ghost fires the
+     * picker; a miss just cancels the preview. The board's touch dispatcher
+     * should call this before the zoom/pan detectors so the player can pick a
+     * side with a single tap.
+     */
+    public boolean dispatchPreviewTap(float x, float y) {
+        if (previewTile == null) return false;
+        PreviewPicker p = previewPicker;
+        if (previewLeftPos != null && hits(previewLeftPos, x, y)) {
+            clearPreview();
+            rebuildChildren();
+            if (p != null) p.onPick(true);
+            return true;
+        }
+        if (previewRightPos != null && hits(previewRightPos, x, y)) {
+            clearPreview();
+            rebuildChildren();
+            if (p != null) p.onPick(false);
+            return true;
+        }
+        // Tap missed the ghosts while preview is active → cancel.
+        clearPreview();
+        rebuildChildren();
+        return true;
+    }
+
+    private static boolean hits(TilePos pos, float x, float y) {
+        return x >= pos.x && x <= pos.x + pos.w
+                && y >= pos.y && y <= pos.y + pos.h;
+    }
+
+    /**
+     * Compute where the next tile WOULD land on a given branch, without actually
+     * placing it. Done by snapshotting branch state + position map, running the
+     * real placement algorithm, reading the result, then restoring everything.
+     * This guarantees the preview is pixel-identical to the actual play.
+     */
+    private TilePos computePreviewPosition(Tile tile, boolean rightBranch) {
+        if (rightSide == null || leftSide == null) return null;
+        if (positionsByTile.containsKey(tile)) return null;
+        SideState savedRight = copy(rightSide);
+        SideState savedLeft  = copy(leftSide);
+        Map<Tile, TilePos> savedPositions = new HashMap<>(positionsByTile);
+        try {
+            placeOnBranch(rightBranch ? rightSide : leftSide, tile, rightBranch);
+            return positionsByTile.get(tile);
+        } finally {
+            rightSide = savedRight;
+            leftSide  = savedLeft;
+            positionsByTile.clear();
+            positionsByTile.putAll(savedPositions);
+        }
+    }
+
+    private static SideState copy(SideState s) {
+        SideState c = new SideState();
+        c.direction = s.direction;
+        c.endX = s.endX;
+        c.endY = s.endY;
+        c.lastTile = s.lastTile;
+        c.turnsRemaining = s.turnsRemaining;
+        return c;
+    }
+
     /** True if {@code pos} intersects any tile we already placed on the board. */
     private boolean overlapsExisting(TilePos pos) {
         for (TilePos other : positionsByTile.values()) {
@@ -454,5 +618,35 @@ public class DominoBoardView extends FrameLayout {
             }
         }
         pendingAnimateIndex = -1;
+
+        // Ghost slots last so they sit ON TOP of any neighbouring tiles.
+        if (previewTile != null) {
+            if (previewLeftPos  != null) addGhostView(previewLeftPos);
+            if (previewRightPos != null) addGhostView(previewRightPos);
+        }
+    }
+
+    /**
+     * Render a single ghost slot: a translucent rounded rectangle with a thick
+     * outline, sized to match where the real tile would land. No pip artwork —
+     * the silhouette alone signals "tap here" without competing visually with
+     * the actual chain.
+     */
+    private void addGhostView(TilePos pos) {
+        View v = new View(getContext());
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0x33FFFFFF);
+        bg.setStroke(dp(2), 0xCC1976D2);
+        bg.setCornerRadius(dp(4));
+        v.setBackground(bg);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                Math.round(pos.w), Math.round(pos.h));
+        lp.leftMargin = Math.round(pos.x);
+        lp.topMargin  = Math.round(pos.y);
+        v.setLayoutParams(lp);
+        addView(v);
+        // Subtle pulse so the slot reads as interactive, not as part of the chain.
+        v.setAlpha(0.6f);
+        v.animate().alpha(1f).setDuration(450).start();
     }
 }
