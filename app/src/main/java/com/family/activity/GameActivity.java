@@ -73,7 +73,6 @@ public class GameActivity extends AppCompatActivity {
     private LinearLayout myHand;
     private TextView handHint;
     private TextView bazaarInfo;
-    private MaterialButton drawButton;
     private MaterialButton nextRoundButton;
     private MaterialButton leaveButton;
 
@@ -114,13 +113,15 @@ public class GameActivity extends AppCompatActivity {
         myHand = findViewById(R.id.my_hand);
         handHint = findViewById(R.id.hand_hint);
         bazaarInfo = findViewById(R.id.bazaar_info);
-        drawButton = findViewById(R.id.draw_button);
         nextRoundButton = findViewById(R.id.next_round_button);
         leaveButton = findViewById(R.id.leave_button);
 
-        drawButton.setOnClickListener(v -> onDrawOrPass());
         nextRoundButton.setOnClickListener(v -> onNextRound());
         leaveButton.setOnClickListener(v -> handleLeave());
+        // The hand-hint banner becomes the draw/pass trigger when it's prompting
+        // for one — visually it already looks like a tappable pill, so the user's
+        // instinct is to tap it. The standalone "Взять/Пропустить" button is gone.
+        handHint.setOnClickListener(v -> onDrawOrPass());
         // Manual escape hatch: tap the status line to force a fresh fetch from
         // Firebase. Useful when the player suspects local state has drifted from
         // the server's view of whose turn it is.
@@ -701,17 +702,18 @@ public class GameActivity extends AppCompatActivity {
         android.widget.FrameLayout.LayoutParams nlp = new android.widget.FrameLayout.LayoutParams(
                 android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
                 android.widget.FrameLayout.LayoutParams.WRAP_CONTENT);
-        nlp.gravity = Gravity.TOP | Gravity.START;
-        nlp.setMargins(dp(1), 0, 0, 0);
+        // Bottom-right corner. Margins pull the digit out of the rounded-corner
+        // arc of the tile border so the background pill doesn't cover the border.
+        nlp.gravity = Gravity.BOTTOM | Gravity.END;
+        nlp.setMargins(0, 0, dp(3), dp(1));
         badge.setLayoutParams(nlp);
         badge.setText(String.valueOf(value));
-        badge.setTextSize(9);
+        // Bigger and bolder. No background — the tile artwork has a white field so
+        // the digit reads cleanly on its own.
+        badge.setTextSize(11);
+        badge.setTypeface(badge.getTypeface(), android.graphics.Typeface.BOLD);
         badge.setTextColor(ContextCompat.getColor(this, R.color.domino_primary_dark));
-        GradientDrawable badgeBg = new GradientDrawable();
-        badgeBg.setColor(0xCCFFFFFF);
-        badgeBg.setCornerRadius(dp(3));
-        badge.setBackground(badgeBg);
-        badge.setPadding(dp(2), 0, dp(2), 0);
+        badge.setIncludeFontPadding(false);
         fl.addView(badge);
 
         return fl;
@@ -733,10 +735,8 @@ public class GameActivity extends AppCompatActivity {
     }
 
     private void renderControls(GameState s) {
-        boolean myTurn = isMyTurnAndPlayable();
-        boolean canMove = myTurn && DominoLogic.canPlayerMakeMove(s, userId);
-        boolean bazaarLeft = s.getBazaar() != null && !s.getBazaar().isEmpty();
         boolean roundOver = s.isRoundFinished();
+        boolean bazaarLeft = s.getBazaar() != null && !s.getBazaar().isEmpty();
 
         // Bazaar count is useful during the round even when it's not my turn —
         // hide it once the round is over (nothing left to draw or count).
@@ -744,16 +744,6 @@ public class GameActivity extends AppCompatActivity {
             bazaarInfo.setText("");
         } else {
             bazaarInfo.setText(bazaarLeft ? "Базар: " + s.getBazaar().size() : "Базар пуст");
-        }
-
-        // Draw/pass button only when there's something actionable to do — my turn
-        // AND I have no legal move on the board. Otherwise the disabled-but-visible
-        // state is just clutter (especially at round end, where it sat permanently
-        // greyed out).
-        boolean drawVisible = myTurn && !canMove && !roundOver;
-        drawButton.setVisibility(drawVisible ? View.VISIBLE : View.GONE);
-        if (drawVisible) {
-            drawButton.setText(bazaarLeft ? "Взять" : "Пропустить");
         }
 
         nextRoundButton.setVisibility(
@@ -796,7 +786,7 @@ public class GameActivity extends AppCompatActivity {
             }
         } else if (isMyTurnAndPlayable() && !DominoLogic.canPlayerMakeMove(s, userId)) {
             boolean bazaarLeft = s.getBazaar() != null && !s.getBazaar().isEmpty();
-            text = bazaarLeft ? "Нет хода — возьмите из базара" : "Нет хода — пропустите ход";
+            text = bazaarLeft ? "Нет хода — взять из базара" : "Нет хода — пропустить ход";
         }
 
         if (text == null) {
@@ -809,6 +799,10 @@ public class GameActivity extends AppCompatActivity {
         bg.setColor((0xE6 << 24) | (bgColor & 0x00FFFFFF));
         bg.setCornerRadius(dp(20));
         handHint.setBackground(bg);
+        // Clip the foreground ripple to the rounded outline of the pill — without
+        // this the selectableItemBackground ripple would be a rectangle that
+        // sticks out past the rounded corners.
+        handHint.setClipToOutline(true);
         handHint.setVisibility(View.VISIBLE);
     }
 
@@ -906,18 +900,17 @@ public class GameActivity extends AppCompatActivity {
         TextView numberBadge = new TextView(this);
         FrameLayout.LayoutParams nlp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
-        nlp.gravity = Gravity.TOP | Gravity.START;
-        nlp.setMargins(dp(2), dp(1), 0, 0);
+        // Bottom-right corner, no background. Tile artwork is white-ground so the
+        // bold dark digit is readable on its own — the old translucent pill was
+        // clipping the rounded tile border.
+        nlp.gravity = Gravity.BOTTOM | Gravity.END;
+        nlp.setMargins(0, 0, dp(4), dp(2));
         numberBadge.setLayoutParams(nlp);
         numberBadge.setText(String.valueOf(value));
-        numberBadge.setTextSize(11);
+        numberBadge.setTextSize(13);
+        numberBadge.setTypeface(numberBadge.getTypeface(), android.graphics.Typeface.BOLD);
         numberBadge.setTextColor(ContextCompat.getColor(this, R.color.domino_primary_dark));
-        // Semi-transparent badge background keeps the digit legible over any artwork.
-        GradientDrawable badgeBg = new GradientDrawable();
-        badgeBg.setColor(0xCCFFFFFF);
-        badgeBg.setCornerRadius(dp(4));
-        numberBadge.setBackground(badgeBg);
-        numberBadge.setPadding(dp(3), 0, dp(3), 0);
+        numberBadge.setIncludeFontPadding(false);
         fl.addView(numberBadge);
 
         return fl;

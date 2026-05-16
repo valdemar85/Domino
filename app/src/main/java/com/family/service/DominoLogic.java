@@ -213,6 +213,10 @@ public final class DominoLogic {
             scoreRound(state);
         } else {
             advanceTurn(state);
+            // After the play, the new open ends may have left no legal move for
+            // anyone — and if the bazaar is also empty, that's a fish. Declare it
+            // now rather than forcing the remaining players through "Пропустить".
+            tryDeclareFish(state);
         }
         return true;
     }
@@ -230,25 +234,43 @@ public final class DominoLogic {
         return drawn;
     }
 
-    /** Current player passes. Increments pass counter; if it reaches player count, fish. */
+    /**
+     * Current player passes. Advances the turn and immediately checks for fish —
+     * we no longer wait for N consecutive passes around the table, because that
+     * sequence is fully deterministic from the current state: if bazaar is empty
+     * and no remaining player has a legal move, the rest of the passes are just
+     * busywork.
+     */
     public static void pass(GameState state) {
         state.setPassCount(state.getPassCount() + 1);
         advanceTurn(state);
-        if (state.getPassCount() >= state.getPlayerOrder().size()) {
-            state.setRoundFinished(true);
-            state.setFish(true);
-            String winner = null;
-            int minPoints = Integer.MAX_VALUE;
-            for (String pid : state.getPlayerOrder()) {
-                int s = handSum(state.getHands().get(pid));
-                if (s < minPoints) {
-                    minPoints = s;
-                    winner = pid;
-                }
-            }
-            state.setRoundWinnerId(winner);
-            scoreRound(state);
+        tryDeclareFish(state);
+    }
+
+    /**
+     * If the bazaar is empty and no player can move, end the round as a fish.
+     * Winner is the player with the lowest hand sum. No-op if the round is
+     * already finished or if any move is still possible.
+     */
+    private static void tryDeclareFish(GameState state) {
+        if (state.isRoundFinished()) return;
+        if (state.getBazaar() != null && !state.getBazaar().isEmpty()) return;
+        for (String pid : state.getPlayerOrder()) {
+            if (canPlayerMakeMove(state, pid)) return;
         }
+        state.setRoundFinished(true);
+        state.setFish(true);
+        String winner = null;
+        int minPoints = Integer.MAX_VALUE;
+        for (String pid : state.getPlayerOrder()) {
+            int s = handSum(state.getHands().get(pid));
+            if (s < minPoints) {
+                minPoints = s;
+                winner = pid;
+            }
+        }
+        state.setRoundWinnerId(winner);
+        scoreRound(state);
     }
 
     public static int handSum(List<Tile> hand) {

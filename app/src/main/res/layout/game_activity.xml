@@ -109,16 +109,8 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:textColor="@color/domino_on_surface_muted"
-            android:textSize="12sp"/>
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/draw_button"
-            style="@style/Widget.Domino.Button.Outlined"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="4dp"
-            android:insetTop="2dp"
-            android:insetBottom="2dp"
-            android:text="Взять"/>
+            android:textSize="15sp"
+            android:textStyle="bold"/>
         <com.google.android.material.button.MaterialButton
             android:id="@+id/next_round_button"
             android:layout_width="wrap_content"
@@ -185,6 +177,9 @@
             android:textStyle="bold"
             android:gravity="center"
             android:elevation="4dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
             android:visibility="gone"/>
     </com.google.android.material.card.MaterialCardView>
 </androidx.constraintlayout.widget.ConstraintLayout>
