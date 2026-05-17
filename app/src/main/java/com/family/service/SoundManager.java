@@ -12,9 +12,10 @@ import android.media.SoundPool;
  * compiles cleanly with or without them. To enable real sounds, place these files
  * under app/src/main/res/raw/:
  *
- *   tile_play.ogg  — short tile clack    (~150-300 ms)
- *   tile_draw.ogg  — short shuffle/rustle (~150-300 ms)
- *   round_win.ogg  — short fanfare        (~1-2 s)
+ *   tile_play.ogg     — short tile clack    (~150-300 ms)
+ *   tile_draw.ogg     — short shuffle/rustle (~150-300 ms)
+ *   bazaar_empty.ogg  — distinct "scraping bottom" sound (~300-500 ms)
+ *   round_win.ogg     — short fanfare        (~1-2 s)
  *
  * Without custom files, falls back to AudioManager's built-in keyclick sounds so
  * the player still gets some auditory feedback.
@@ -24,6 +25,7 @@ public class SoundManager {
     private SoundPool soundPool;
     private int tilePlaySoundId = 0;
     private int tileDrawSoundId = 0;
+    private int bazaarEmptySoundId = 0;
     private int roundWinSoundId = 0;
 
     public SoundManager(Context context) {
@@ -38,6 +40,7 @@ public class SoundManager {
                 .build();
         tilePlaySoundId = loadIfPresent("tile_play");
         tileDrawSoundId = loadIfPresent("tile_draw");
+        bazaarEmptySoundId = loadIfPresent("bazaar_empty");
         roundWinSoundId = loadIfPresent("round_win");
     }
 
@@ -64,6 +67,17 @@ public class SoundManager {
             // FX_KEYPRESS_SPACEBAR is a softer, lower-pitched click than the standard
             // press, which distinguishes a "draw" from a "play" auditorily.
             playSystemFallback(AudioManager.FX_KEYPRESS_SPACEBAR);
+        }
+    }
+
+    public void playBazaarEmpty() {
+        if (soundPool == null) return;
+        if (bazaarEmptySoundId != 0) {
+            soundPool.play(bazaarEmptySoundId, 1f, 1f, 1, 0, 1f);
+        } else {
+            // FX_KEYPRESS_DELETE is a heavier, slightly-negative-feel click —
+            // appropriate semantic for "supply has been depleted".
+            playSystemFallback(AudioManager.FX_KEYPRESS_DELETE);
         }
     }
 

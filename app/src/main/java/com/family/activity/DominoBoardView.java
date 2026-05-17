@@ -87,6 +87,15 @@ public class DominoBoardView extends FrameLayout {
     private int faceSizeDp = 30;
     private int pendingAnimateIndex = -1;
     private boolean pendingRebuild = false;
+    /**
+     * Index of the anchor tile in {@link #tiles}. The anchor is the FIRST tile played
+     * in the round and sits in the centre of the canvas. Tiles before it are the left
+     * branch, after it are the right branch. Maintained by the caller (it lives in
+     * the GameState) so the snake survives a layout reset (orientation change, etc.)
+     * without us guessing that tiles.get(0) is the anchor — that's only true on a
+     * fresh round.
+     */
+    private int anchorIndex = 0;
 
     // ---- preview / pick-side state ----
     private Tile previewTile;
@@ -102,7 +111,7 @@ public class DominoBoardView extends FrameLayout {
         setClipChildren(false);
     }
 
-    public void setTiles(List<Tile> newTiles, int animateIndex, TileRenderer r) {
+    public void setTiles(List<Tile> newTiles, int anchorIndex, int animateIndex, TileRenderer r) {
         this.renderer = r;
         // Detect a fresh round (anchor missing or replaced) so we can restore the
         // "natural" face size — face only shrinks monotonically WITHIN a round, but
@@ -113,6 +122,14 @@ public class DominoBoardView extends FrameLayout {
                 || !newTiles.contains(anchor);
         this.tiles.clear();
         if (newTiles != null) this.tiles.addAll(newTiles);
+        // Clamp defensively — stale GameState could have a bad index.
+        if (this.tiles.isEmpty()) {
+            this.anchorIndex = 0;
+        } else if (anchorIndex < 0 || anchorIndex >= this.tiles.size()) {
+            this.anchorIndex = 0;
+        } else {
+            this.anchorIndex = anchorIndex;
+        }
         this.pendingAnimateIndex = animateIndex;
         // A new chain may invalidate the previous preview (different ends, different
         // anchor). Cheapest correct thing is to drop it; the next hand tap re-creates
@@ -268,9 +285,13 @@ public class DominoBoardView extends FrameLayout {
 
     /**
      * Place the anchor in the centre of the board and prep the two branches.
+     * The anchor is the tile at {@link #anchorIndex} in {@link #tiles}, NOT just
+     * tiles.get(0) — after left-side plays grow the chain, tiles[0] is the
+     * leftmost tile, while the round's centre stays at the original first play.
      */
     private void initWithAnchor() {
-        anchor = tiles.get(0);
+        int safeIdx = (anchorIndex >= 0 && anchorIndex < tiles.size()) ? anchorIndex : 0;
+        anchor = tiles.get(safeIdx);
         boolean isDouble = anchor.getA() == anchor.getB();
         int face = faceSizePx();
         int gap = dp(3);
@@ -368,19 +389,27 @@ public class DominoBoardView extends FrameLayout {
             // double commonly overflows by ~half a face and would otherwise
             // cascade through another 2-3 turns into a wrong-face placement.
             if (isDouble) {
+                // Doubles may slide along their long axis to fit, BUT only within
+                // ±half-face of the centred position. If we let them shift further,
+                // the chain axis (where the previous tile attaches) ends up at the
+                // double's edge — visually it looks like the double is glued to a
+                // neighbouring half-tile, not the exposed face. If even this tight
+                // shift can't fit, leave pos at default; the bounds check below
+                // will fail and the chain rotates another 90°.
+                float halfFace = face / 2f;
                 if (horizontalChain) {
-                    // Vertical double, slide along y.
-                    float chainY = branch.endY;
-                    float lower = Math.max(padding, chainY - boxH);
-                    float upper = Math.min(getHeight() - padding - boxH, chainY);
+                    // Vertical double: chain axis horizontal at branch.endY.
+                    float centred = branch.endY - boxH / 2f;
+                    float lower = Math.max(padding, centred - halfFace);
+                    float upper = Math.min(getHeight() - padding - boxH, centred + halfFace);
                     if (lower <= upper) {
                         pos.y = Math.max(lower, Math.min(upper, pos.y));
                     }
                 } else {
-                    // Horizontal double, slide along x.
-                    float chainX = branch.endX;
-                    float lower = Math.max(padding, chainX - boxW);
-                    float upper = Math.min(getWidth() - padding - boxW, chainX);
+                    // Horizontal double: chain axis vertical at branch.endX.
+                    float centred = branch.endX - boxW / 2f;
+                    float lower = Math.max(padding, centred - halfFace);
+                    float upper = Math.min(getWidth() - padding - boxW, centred + halfFace);
                     if (lower <= upper) {
                         pos.x = Math.max(lower, Math.min(upper, pos.x));
                     }
@@ -507,36 +536,16 @@ public class DominoBoardView extends FrameLayout {
     }
 
     /**
-     * Hit-test a tap against the ghosts. Returns true when there's an active
-     * preview — in which case the tap is consumed: a hit on a ghost fires the
-     * picker; a miss just cancels the preview. The board's touch dispatcher
-     * should call this before the zoom/pan detectors so the player can pick a
-     * side with a single tap.
+     * Called by the board's gesture detector when a tap landed somewhere on the
+     * board that wasn't on a ghost (ghost views handle their own clicks). While a
+     * preview is active, this interprets a missed tap as a cancel and removes the
+     * ghosts.
      */
     public boolean dispatchPreviewTap(float x, float y) {
         if (previewTile == null) return false;
-        PreviewPicker p = previewPicker;
-        if (previewLeftPos != null && hits(previewLeftPos, x, y)) {
-            clearPreview();
-            rebuildChildren();
-            if (p != null) p.onPick(true);
-            return true;
-        }
-        if (previewRightPos != null && hits(previewRightPos, x, y)) {
-            clearPreview();
-            rebuildChildren();
-            if (p != null) p.onPick(false);
-            return true;
-        }
-        // Tap missed the ghosts while preview is active → cancel.
         clearPreview();
         rebuildChildren();
         return true;
-    }
-
-    private static boolean hits(TilePos pos, float x, float y) {
-        return x >= pos.x && x <= pos.x + pos.w
-                && y >= pos.y && y <= pos.y + pos.h;
     }
 
     /**
@@ -621,18 +630,19 @@ public class DominoBoardView extends FrameLayout {
 
         // Ghost slots last so they sit ON TOP of any neighbouring tiles.
         if (previewTile != null) {
-            if (previewLeftPos  != null) addGhostView(previewLeftPos);
-            if (previewRightPos != null) addGhostView(previewRightPos);
+            if (previewLeftPos  != null) addGhostView(previewLeftPos,  true);
+            if (previewRightPos != null) addGhostView(previewRightPos, false);
         }
     }
 
     /**
-     * Render a single ghost slot: a translucent rounded rectangle with a thick
-     * outline, sized to match where the real tile would land. No pip artwork —
-     * the silhouette alone signals "tap here" without competing visually with
-     * the actual chain.
+     * Render a single ghost slot — a translucent outlined rectangle the player can
+     * tap to confirm placement. The view carries its own OnClickListener instead of
+     * relying on the board's gesture detector + hit-test; that earlier path could
+     * lose a tap if coordinates ever got transformed asymmetrically (e.g. while the
+     * board was pinch-zoomed), leaving the ghost cleared with no tile placed.
      */
-    private void addGhostView(TilePos pos) {
+    private void addGhostView(TilePos pos, boolean leftSide) {
         View v = new View(getContext());
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(0x33FFFFFF);
@@ -644,6 +654,13 @@ public class DominoBoardView extends FrameLayout {
         lp.leftMargin = Math.round(pos.x);
         lp.topMargin  = Math.round(pos.y);
         v.setLayoutParams(lp);
+        v.setClickable(true);
+        v.setOnClickListener(view -> {
+            PreviewPicker p = previewPicker;
+            clearPreview();
+            rebuildChildren();
+            if (p != null) p.onPick(leftSide);
+        });
         addView(v);
         // Subtle pulse so the slot reads as interactive, not as part of the chain.
         v.setAlpha(0.6f);

@@ -548,6 +548,13 @@ public class GameActivity extends AppCompatActivity {
         if (previousBazaarSize >= 0 && newBazaarSize < previousBazaarSize
                 && soundManager != null) {
             soundManager.playDraw();
+            // Extra alert when this draw was the LAST one — distinct sound so the
+            // table knows the bazaar just ran out. Crucially gated on the previous
+            // value being >0: in a 4-player deal the bazaar is empty from the very
+            // first render (everything was dealt), and we don't want to chime there.
+            if (newBazaarSize == 0) {
+                soundManager.playBazaarEmpty();
+            }
         }
         previousBazaarSize = newBazaarSize;
 
@@ -643,8 +650,12 @@ public class GameActivity extends AppCompatActivity {
 
         // Delegate snake layout to DominoBoardView. We supply the per-tile renderer
         // because GameActivity owns the visual style (assets, badges, borders).
-        board.setTiles(chain, animateIndex, (tile, verticalOrientation, faceSizePx) ->
-                createBoardTileView(tile, verticalOrientation, faceSizePx));
+        // Pass the anchor index from GameState — that's the only way the view can
+        // reliably identify the chain's centre after a full layout reset (e.g. on
+        // an orientation change, which clears DominoBoardView's cached anchor).
+        board.setTiles(chain, s.getAnchorIndex(), animateIndex,
+                (tile, verticalOrientation, faceSizePx) ->
+                        createBoardTileView(tile, verticalOrientation, faceSizePx));
     }
 
     /**
